@@ -16,10 +16,9 @@
  */
 package org.jboss.aerogear.webpush;
 
-import org.jboss.aerogear.webpush.util.Arguments;
-
 import java.io.File;
 import java.net.URL;
+import java.util.Objects;
 
 public final class DefaultWebPushConfig implements WebPushServerConfig {
 
@@ -42,8 +41,8 @@ public final class DefaultWebPushConfig implements WebPushServerConfig {
         port = builder.port;
         endpointHost = builder.endpointHost == null ? host : builder.endpointHost;
         endpointPort = builder.endpointPort <= 0 ? port : builder.endpointPort;
-        cert = fileSystemOrClasspath(Arguments.checkNotNull(builder.cert, "cert must not be null"));
-        privateKey = fileSystemOrClasspath(Arguments.checkNotNull(builder.privateKey, "privateKey must not be null"));
+        cert = fileSystemOrClasspath(Objects.requireNonNull(builder.cert, "cert must not be null"));
+        privateKey = fileSystemOrClasspath(Objects.requireNonNull(builder.privateKey, "privateKey must not be null"));
         endpointTls = builder.endpointTls;
         password = builder.password;
         registrationMaxAge = builder.registrationMaxAge;

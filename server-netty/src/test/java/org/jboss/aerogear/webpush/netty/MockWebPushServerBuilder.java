@@ -2,7 +2,7 @@ package org.jboss.aerogear.webpush.netty;
 
 import org.jboss.aerogear.webpush.Subscription;
 import org.jboss.aerogear.webpush.Registration;
-import org.jboss.aerogear.webpush.Registration.Resource;
+import org.jboss.aerogear.webpush.Resource;
 import org.jboss.aerogear.webpush.WebPushServer;
 import org.jboss.aerogear.webpush.WebPushServerConfig;
 import org.mockito.stubbing.OngoingStubbing;

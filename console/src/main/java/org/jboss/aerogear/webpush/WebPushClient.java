@@ -18,7 +18,6 @@ package org.jboss.aerogear.webpush;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelOption;
@@ -46,13 +45,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static io.netty.buffer.Unpooled.copiedBuffer;
-import static io.netty.handler.codec.http.HttpMethod.POST;
-import static io.netty.handler.codec.http.HttpMethod.GET;
-import static io.netty.handler.codec.http.HttpMethod.PUT;
 import static io.netty.handler.codec.http.HttpMethod.DELETE;
+import static io.netty.handler.codec.http.HttpMethod.GET;
+import static io.netty.handler.codec.http.HttpMethod.POST;
+import static io.netty.handler.codec.http.HttpMethod.PUT;
 import static io.netty.util.CharsetUtil.UTF_8;
 
-public class WebPushClient {
+public final class WebPushClient {
+
+    private static final AsciiString PUSH_RECEIPT_HEADER = new AsciiString("push-receipt");
 
     private final String host;
     private final int port;
@@ -104,7 +105,7 @@ public class WebPushClient {
     }
 
     public void createSubscription(final String subscribeUrl) throws Exception {
-        writeRequest(POST, subscribeUrl, Unpooled.buffer());
+        writeRequest(POST, subscribeUrl);
     }
 
     public void deleteSubscription(final String endpointUrl) throws Exception {
@@ -118,7 +119,7 @@ public class WebPushClient {
     public void notify(final String endpointUrl, final String payload, final String receiptUrl) throws Exception {
         final Http2Headers headers = http2Headers(POST, endpointUrl);
         if (receiptUrl != null) {
-            headers.add(new AsciiString("push-receipt"), AsciiString.of(receiptUrl));
+            headers.add(PUSH_RECEIPT_HEADER, AsciiString.of(receiptUrl));
         }
         writeRequest(headers, copiedBuffer(payload, UTF_8));
     }

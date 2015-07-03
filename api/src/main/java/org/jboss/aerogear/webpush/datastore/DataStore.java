@@ -16,16 +16,21 @@
  */
 package org.jboss.aerogear.webpush.datastore;
 
+import org.jboss.aerogear.webpush.NewSubscription;
+import org.jboss.aerogear.webpush.Registration;
+import org.jboss.aerogear.webpush.Subscription;
+
 import java.util.Optional;
 import java.util.Set;
-
-import org.jboss.aerogear.webpush.Subscription;
-import org.jboss.aerogear.webpush.Registration;
 
 /**
  * Handles the storing of subscriptions for a WebPush Server implementation.
  */
 public interface DataStore {
+
+    void saveNewSubscription(NewSubscription subscription);
+
+    Optional<NewSubscription> getNewSubscription(String id);
 
     /**
      * Saves the server's private key salt.

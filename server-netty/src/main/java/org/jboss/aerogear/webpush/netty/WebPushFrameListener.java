@@ -31,10 +31,11 @@ import io.netty.util.AttributeKey;
 import io.netty.util.ByteString;
 import io.netty.util.concurrent.Future;
 import org.jboss.aerogear.webpush.AggregateSubscription;
+import org.jboss.aerogear.webpush.NewSubscription;
 import org.jboss.aerogear.webpush.Registration;
-import org.jboss.aerogear.webpush.Registration.Resource;
-import org.jboss.aerogear.webpush.Registration.WebLink;
+import org.jboss.aerogear.webpush.Resource;
 import org.jboss.aerogear.webpush.Subscription;
+import org.jboss.aerogear.webpush.WebLink;
 import org.jboss.aerogear.webpush.WebPushServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +43,7 @@ import org.slf4j.LoggerFactory;
 import java.net.URI;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
@@ -58,28 +60,38 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpResponseStatus.REQUEST_ENTITY_TOO_LARGE;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static org.jboss.aerogear.webpush.JsonMapper.fromJson;
-import static org.jboss.aerogear.webpush.Registration.WebLink.AGGREGATE;
-import static org.jboss.aerogear.webpush.Registration.WebLink.REGISTRATION;
 import static org.jboss.aerogear.webpush.WebPushServerConfig.MESSAGE_MAX_LOWER_BOUND;
 
 public class WebPushFrameListener extends Http2FrameAdapter {
 
-    public static final AsciiString LINK = new AsciiString("link");
-    public static final AsciiString ANY_ORIGIN = new AsciiString("*");
-    private static final AsciiString AGGREGATION_JSON = new AsciiString("application/push-aggregation+json");
     private static final Logger LOGGER = LoggerFactory.getLogger(WebPushFrameListener.class);
+
+    private static final String WEBPUSH_URI = "/webpush/";
+    private static final AsciiString ANY_ORIGIN = new AsciiString("*");
+    private static final AsciiString EXPOSE_HEADERS = new AsciiString("Link, Cache-Control, Location");
+    private static final AsciiString PUSH_RECEIPT_HEADER = new AsciiString("push-receipt");
+    private static final AsciiString AGGREGATION_JSON = new AsciiString("application/push-aggregation+json");
+    private static final AttributeKey<String> REG_ID = AttributeKey.valueOf("regId");
+    private static final AttributeKey<String> SUBSCRIPTION_ID = AttributeKey.valueOf("subscriptionId");
+    private static final AsciiString PREFER = new AsciiString("prefer");
+
     private static final ConcurrentHashMap<String, Optional<Client>> monitoredStreams = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, String> notificationStreams = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, AggregateSubscription> aggregateChannels = new ConcurrentHashMap<>();
-    private static final AttributeKey<String> REG_ID = AttributeKey.valueOf("regId");
+
     private static final String GET = "GET";
     private static final String POST = "POST";
     private static final String PUT = "PUT";
     private static final String DELETE = "DELETE";
-    private static final AsciiString PREFER = new AsciiString("prefer");
+
+    static final AsciiString LINK = new AsciiString("link");
+
     private final WebPushServer webpushServer;
-    private Http2Connection.PropertyKey webpushPathPropertyKey;
     private Http2ConnectionEncoder encoder;
+
+    private Http2Connection.PropertyKey pathPropertyKey;
+    private Http2Connection.PropertyKey resourcePropertyKey;
+    private Http2Connection.PropertyKey pushReceiptPropertyKey;
 
     public WebPushFrameListener(final WebPushServer webpushServer) {
         Objects.requireNonNull(webpushServer, "webpushServer must not be null");
@@ -88,7 +100,10 @@ public class WebPushFrameListener extends Http2FrameAdapter {
 
     public void encoder(Http2ConnectionEncoder encoder) {
         this.encoder = encoder;
-        webpushPathPropertyKey = encoder.connection().newKey();
+        Http2Connection connection = encoder.connection();
+        pathPropertyKey = connection.newKey();
+        resourcePropertyKey = connection.newKey();
+        pushReceiptPropertyKey = connection.newKey();
     }
 
     @Override
@@ -104,8 +119,10 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         final String method = headers.method().toString();
         LOGGER.info("onHeadersRead. streamId={}, method={}, path={}, endstream={}", streamId, method, path, endStream);
 
+        Resource resource = getResource(path);
         Http2Stream stream = encoder.connection().stream(streamId);
-        stream.setProperty(webpushPathPropertyKey, path);
+        stream.setProperty(pathPropertyKey, path);
+        stream.setProperty(resourcePropertyKey, resource);
         switch (method) {
             case GET:
                 if (path.contains(Resource.REGISTRATION.resourceName())) {
@@ -113,10 +130,21 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 } else {
                     handleStatus(ctx, path, streamId, padding);
                 }
-                break;
             case POST:
-                if (path.contains(Resource.AGGREGATE.resourceName())) {
-                    verifyAggregateMimeType(headers);
+                switch (resource) {
+                    case SUBSCRIBE:
+                        handleNewSubscribe(ctx, streamId);
+                        return;
+                    case RECEIPTS:
+                        handleReceipts(ctx, streamId, path);
+                        return;
+                    case PUSH:
+                        Optional<String> pushReceiptToken = getPushReceiptToken(headers);
+                        stream.setProperty(pushReceiptPropertyKey, pushReceiptToken);
+                        return;
+                    case AGGREGATE:
+                        verifyAggregateMimeType(headers);
+                        return;
                 }
                 break;
             case DELETE:
@@ -127,6 +155,17 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         }
     }
 
+    private static Resource getResource(String path) {
+        String resourceName;
+        int idx = path.indexOf('/', WEBPUSH_URI.length());
+        if (idx > 0) {
+            resourceName = path.substring(WEBPUSH_URI.length(), idx);
+        } else {
+            resourceName = path.substring(WEBPUSH_URI.length());
+        }
+        return Resource.byResourceName(resourceName);
+    }
+
     @Override
     public int onDataRead(final ChannelHandlerContext ctx,
                           final int streamId,
@@ -134,18 +173,61 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                           final int padding,
                           final boolean endOfStream) throws Http2Exception {
         Http2Stream stream = encoder.connection().stream(streamId);
-        final String path = stream.getProperty(webpushPathPropertyKey);
-        LOGGER.info("onDataRead. streamId={}, path={}, endstream={}", streamId, path, endOfStream);
-        if (path.contains(Resource.REGISTER.resourceName())) {
-            handleDeviceRegister(ctx, streamId);
-        } else if (path.contains(Resource.SUBSCRIBE.resourceName())) {
-            handleSubscribe(ctx, path, streamId);
-        } else if (path.contains(Resource.AGGREGATE.resourceName())) {
-            handleAggregateSubscribe(ctx, path, streamId, data);
-        } else {
-            handleNotification(ctx, streamId, data, padding, path);
+        String path = stream.getProperty(pathPropertyKey);
+        Resource resource = stream.getProperty(resourcePropertyKey);
+        LOGGER.info("onDataRead. streamId={}, path={}, resource={}, endstream={}",
+                streamId, path, resource, endOfStream);
+        switch (resource) {
+            case PUSH:
+                handlePush(ctx, streamId, path, data, padding);
+                break;
+            case AGGREGATE:
+                handleAggregateSubscribe(ctx, path, streamId, data);
+                break;
+            default:    //FIXME
+                handleNotification(ctx, streamId, data, padding, path);
+                break;
         }
         return super.onDataRead(ctx, streamId, data, padding, endOfStream);
+    }
+
+    private void handlePush(ChannelHandlerContext ctx, int streamId, String path, ByteBuf data, int padding) {
+        Optional<String> pushToken = extractToken(path);
+        pushToken.ifPresent(pt -> {
+            Optional<NewSubscription> subscription = webpushServer.subscriptionByPushToken(pushToken.get());
+            subscription.ifPresent(sub -> {
+                Http2Stream stream = encoder.connection().stream(streamId);
+                Optional<String> receiptToken = stream.getProperty(pushReceiptPropertyKey);
+                if (receiptToken.isPresent()) {
+                    Optional<NewSubscription> receiptSub = webpushServer.subscriptionByReceiptToken(receiptToken.get());
+                    if (!receiptSub.isPresent() || !subscription.equals(receiptSub)) {
+                        throw new RuntimeException("Subscriptions mismatched");
+                    }
+                }
+                final int readableBytes = data.readableBytes();
+                if (readableBytes > webpushServer.config().messageMaxSize() && !(readableBytes <= MESSAGE_MAX_LOWER_BOUND)) {   //FIXME
+                    encoder.writeHeaders(ctx, streamId, messageToLarge(), 0, true, ctx.newPromise());
+                } else {
+                    String pushMessageId = UUID.randomUUID().toString();
+                    String pushMessageToken = webpushServer.generateEndpointToken(pushMessageId, sub.id());
+                    //TODO save message and push to user agent
+                    encoder.writeHeaders(ctx, streamId, pushMessageHeaders(pushMessageToken), 0, true, ctx.newPromise());
+                    LOGGER.info("Push Message Resource: {}", pushMessageToken);
+                }
+            });
+        });
+    }
+
+    private static Optional<String> getPushReceiptToken(Http2Headers headers) {
+        ByteString byteString = headers.get(PUSH_RECEIPT_HEADER);
+        if (byteString != null) {
+            return extractToken(byteString.toString(), Resource.RECEIPT);
+        }
+        return Optional.empty();
+    }
+
+    private static Http2Headers pushMessageHeaders(String pushMessageToken) {
+        return resourceHeaders(Resource.PUSH_MESSAGE, pushMessageToken);
     }
 
     public void shutdown() {
@@ -173,17 +255,18 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                                     final int padding,
                                     final String path) {
         final int readableBytes = data.readableBytes();
-        if (readableBytes > webpushServer.config().messageMaxSize() && !(readableBytes < MESSAGE_MAX_LOWER_BOUND)) {
+        if (readableBytes > webpushServer.config().messageMaxSize() && !(readableBytes <= MESSAGE_MAX_LOWER_BOUND)) {   //FIXME
             encoder.writeHeaders(ctx, streamId, messageToLarge(), 0, true, ctx.newPromise());
         } else {
             final String endpoint = extractEndpointToken(path);
-            handleNotify(endpoint, data, padding, e ->
-                            encoder.writeHeaders(ctx, streamId, acceptedHeaders(), 0, true, ctx.newPromise())
+            handleNotify(endpoint, data, padding, en ->
+                            en.writeHeaders(ctx, streamId, acceptedHeaders(), 0, true, ctx.newPromise())
             );
-            Optional.ofNullable(aggregateChannels.get(endpoint)).ifPresent(agg ->
-                            agg.subscriptions().stream().forEach(entry -> handleNotify(entry.endpoint(), data.copy(), padding, e -> {
-                            }))
-            );
+//            FIXME
+//            Optional.ofNullable(aggregateChannels.get(endpoint)).ifPresent(agg ->
+//                            agg.subscriptions().stream().forEach(entry -> handleNotify(entry.endpoint(), data.copy(), padding, e -> {
+//                            }))
+//            );
         }
     }
 
@@ -198,7 +281,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                               final ByteBuf data,
                               final int padding,
                               final Consumer<Http2ConnectionEncoder> consumer) {
-        final Optional<String> optionalRegId = subscriptionRegIdForEndpoint(extractEndpointToken(endpoint));
+        final Optional<String> optionalRegId = subscriptionRegIdForEndpoint(endpoint);
         if (optionalRegId.isPresent()) {
             final Optional<Client> optionalClient = clientForRegId(optionalRegId.get());
             if (optionalClient.isPresent()) {
@@ -234,24 +317,85 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         }
     }
 
-    private void handleDeviceRegister(final ChannelHandlerContext ctx, final int streamId) {
-        final Registration registration = webpushServer.register();
-        ctx.attr(REG_ID).set(registration.id());
-        encoder.writeHeaders(ctx, streamId, registrationHeaders(registration), 0, true, ctx.newPromise());
-        LOGGER.info("Registered {}", registration);
+    private void handleNewSubscribe(final ChannelHandlerContext ctx, final int streamId) {
+        NewSubscription subscription = webpushServer.newSubscription();
+        ctx.attr(SUBSCRIPTION_ID).set(subscription.id());
+        encoder.writeHeaders(ctx, streamId, subscriptionHeaders(subscription), 0, true, ctx.newPromise());
+        LOGGER.info("Subscription for Push Messages: {}", subscription);
+    }
+
+    private Http2Headers subscriptionHeaders(NewSubscription subscription) {
+        String pushToken = webpushServer.generateEndpointToken(subscription.pushResourceId(), subscription.id());
+        String receiptsToken = webpushServer.generateEndpointToken(subscription.id());
+        return resourceHeaders(Resource.SUBSCRIPTION, subscription.id())
+                .set(ACCESS_CONTROL_EXPOSE_HEADERS, EXPOSE_HEADERS)
+                .set(LINK, asLink(webpushUri(Resource.PUSH, pushToken), WebLink.PUSH),
+                        asLink(webpushUri(Resource.RECEIPTS, receiptsToken), WebLink.RECEIPTS))
+                .set(CACHE_CONTROL, privateCacheWithMaxAge(webpushServer.config().registrationMaxAge()));
+    }
+
+    private void handleReceipts(ChannelHandlerContext ctx, int streamId, String path) {
+        Optional<String> receiptsToken = extractToken(path);
+        receiptsToken.ifPresent(e -> {
+            String subscriptionToken = receiptsToken.get();
+            Optional<NewSubscription> subscription = webpushServer.getSubscription(subscriptionToken);
+            subscription.ifPresent(sub -> {
+                String receiptResourceId = UUID.randomUUID().toString();   //FIXME need save?
+                String receiptResourceToken = webpushServer.generateEndpointToken(receiptResourceId, sub.id());
+                encoder.writeHeaders(ctx, streamId, receiptsHeaders(receiptResourceToken), 0, true, ctx.newPromise());
+                LOGGER.info("Receipt Subscription Resource: {}", receiptResourceToken);
+            });
+        });
+    }
+
+    private static Http2Headers receiptsHeaders(String receiptResourceToken) {
+        return resourceHeaders(Resource.RECEIPT, receiptResourceToken);
+    }
+
+    private static Http2Headers resourceHeaders(Resource resource, String resourceToken) {
+        return new DefaultHttp2Headers(false)
+                .status(CREATED.codeAsText())
+                .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN)
+                .set(LOCATION, webpushUri(resource, resourceToken));
+    }
+
+    private static AsciiString webpushUri(Resource resource, String id) {
+        return new AsciiString(WEBPUSH_URI + resource.resourceName() + "/" + id);
+    }
+
+    private static AsciiString asLink(AsciiString uri, WebLink rel) {
+        return new AsciiString("<" + uri + ">;rel=\"" + rel + "\"");
     }
 
     private static AsciiString asLink(final URI contextUri, final String relationType) {
         return new AsciiString("<" + contextUri + ">;rel=\"" +  relationType + "\"");
     }
 
+    private static Optional<String> extractToken(String path, Resource resource) {
+        String segment = WEBPUSH_URI + resource.resourceName();
+        int idx = path.indexOf(segment);
+        if (idx < 0) {
+            return Optional.empty();
+        }
+        String subpath = path.substring(idx + segment.length());
+        return extractToken(subpath);
+    }
+
+    private static Optional<String> extractToken(String path) {
+        int idx = path.lastIndexOf('/');
+        if (idx < 0) {
+            return Optional.empty();
+        }
+        return Optional.of(path.substring(idx + 1));
+    }
+
     private void handleSubscribe(final ChannelHandlerContext ctx, final String path, final int streamId) {
         final Optional<Subscription> subscription = extractRegistrationId(path, Resource.SUBSCRIBE.resourceName())
                 .flatMap(webpushServer::newSubscription);
-        subscription.ifPresent(ch -> {
-            LOGGER.info("Subscription {}", ch);
-            notificationStreams.put(ch.endpoint(), ch.registrationId());
-            encoder.writeHeaders(ctx, streamId, createdHeaders(ch), 0, true, ctx.newPromise());
+        subscription.ifPresent(ss -> {
+            LOGGER.info("Subscription {}", ss);
+            notificationStreams.put(ss.endpoint(), ss.registrationId());
+            encoder.writeHeaders(ctx, streamId, createdHeaders(ss), 0, true, ctx.newPromise());
         });
     }
 
@@ -261,9 +405,9 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 .set(LOCATION, new AsciiString(registration.uri().toString()))
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN)
                 .set(ACCESS_CONTROL_EXPOSE_HEADERS, new AsciiString("Link, Cache-Control, Location"))
-                .set(LINK, asLink(registration.uri(), REGISTRATION.toString()),
+                .set(LINK, asLink(registration.uri(), WebLink.REGISTRATION.toString()),
                         asLink(registration.subscribeUri(), WebLink.SUBSCRIBE.toString()),
-                        asLink(registration.aggregateUri(), AGGREGATE.toString()))
+                        asLink(registration.aggregateUri(), WebLink.AGGREGATE.toString()))
                 .set(CACHE_CONTROL, privateCacheWithMaxAge(webpushServer.config().registrationMaxAge()));
     }
 
@@ -297,7 +441,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private Http2Headers createdHeaders(final Subscription subscription) {
         return new DefaultHttp2Headers(false)
                 .status(CREATED.codeAsText())
-                .set(LOCATION, new AsciiString("/webpush/" + subscription.endpoint()))
+                .set(LOCATION, new AsciiString(WEBPUSH_URI + subscription.endpoint()))
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN)
                 .set(ACCESS_CONTROL_EXPOSE_HEADERS, new AsciiString("Location"))
                 .set(CACHE_CONTROL, privateCacheWithMaxAge(webpushServer.config().subscriptionMaxAge()));
@@ -401,7 +545,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN)
                 .set(ACCESS_CONTROL_EXPOSE_HEADERS, new AsciiString("Link, Cache-Control"))
                 .set(LINK, asLink(registration.subscribeUri(), WebLink.SUBSCRIBE.toString()),
-                        asLink(registration.aggregateUri(), AGGREGATE.toString()))
+                        asLink(registration.aggregateUri(), WebLink.AGGREGATE.toString()))
                 .set(CACHE_CONTROL, privateCacheWithMaxAge(webpushServer.config().registrationMaxAge()));
     }
 

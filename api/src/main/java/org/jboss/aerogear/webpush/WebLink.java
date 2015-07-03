@@ -14,27 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.jboss.aerogear.webpush.util;
+package org.jboss.aerogear.webpush;
 
-/**
- * Utility methods for checking method arguments.
- */
-public final class Arguments {
+public enum WebLink {
 
-    private Arguments() {
+    SUBSCRIBE("urn:ietf:params:push:sub"),
+    AGGREGATE("urn:ietf:params:push:aggregate"),
+    REGISTRATION("urn:ietf:params:push:reg"),
+    SUBSCRIPTION("urn:ietf:params:push"),
+    PUSH("urn:ietf:params:push"),
+    RECEIPTS("urn:ietf:params:push:receipt");
+
+    private final String type;
+
+    WebLink(final String type) {
+        this.type = type;
     }
 
-    /**
-     * Checks that the given argument is not null. If it is, throws {@link NullPointerException}.
-     * Otherwise, returns the argument.
-     *
-     * @param arg the argument to check.
-     * @param text the text to display if the {@code arg} was null
-     */
-    public static <T> T checkNotNull(final T arg, final String text) {
-        if (arg == null) {
-            throw new NullPointerException(text);
-        }
-        return arg;
+    @Override
+    public String toString() {
+        return type;
+    }
+
+    public String weblink(final String url) {
+        return "<" + url + ">;rel=\"" + type + "\"";
     }
 }

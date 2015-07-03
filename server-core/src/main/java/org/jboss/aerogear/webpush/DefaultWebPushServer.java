@@ -17,7 +17,6 @@
 package org.jboss.aerogear.webpush;
 
 import org.jboss.aerogear.crypto.Random;
-import org.jboss.aerogear.webpush.Registration.Resource;
 import org.jboss.aerogear.webpush.datastore.DataStore;
 import org.jboss.aerogear.webpush.util.CryptoUtil;
 import org.slf4j.Logger;
@@ -47,6 +46,59 @@ public class DefaultWebPushServer implements WebPushServer {
         this.store = store;
         this.config = config;
         this.privateKey = privateKey;
+    }
+
+    /**
+     * TODO
+     */
+    @Override
+    public NewSubscription newSubscription() {
+        String id = UUID.randomUUID().toString();
+        String pushResourceId = UUID.randomUUID().toString();
+        NewSubscription subscription = new DefaultNewSubscription(id, pushResourceId);
+        store.saveNewSubscription(subscription);
+        return subscription;
+    }
+
+    @Override
+    public Optional<NewSubscription> getSubscription(String subscriptionToken) {
+        try {
+            String subscriptionId = CryptoUtil.decrypt(privateKey, subscriptionToken);
+            return store.getNewSubscription(subscriptionId);
+        } catch (Exception e) {
+            LOGGER.debug(e.getMessage(), e);
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<NewSubscription> subscriptionByPushToken(String pushToken) {
+        try {
+            String decrypt = CryptoUtil.decrypt(privateKey, pushToken);
+            String[] tokens = decrypt.split(CryptoUtil.DELIMITER);
+            Optional<NewSubscription> subscription = store.getNewSubscription(tokens[1]);
+            if (subscription.isPresent()) {
+                NewSubscription sub = subscription.get();
+                if (sub.pushResourceId().equals(tokens[0])) {
+                    return subscription;
+                }
+            }
+        } catch (final Exception e) {
+            LOGGER.debug(e.getMessage(), e);
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public Optional<NewSubscription> subscriptionByReceiptToken(String receiptToken) {
+        try {
+            String decrypt = CryptoUtil.decrypt(privateKey, receiptToken);
+            String[] tokens = decrypt.split(CryptoUtil.DELIMITER);
+            return store.getNewSubscription(tokens[1]);
+        } catch (final Exception e) {
+            LOGGER.debug(e.getMessage(), e);
+        }
+        return Optional.empty();
     }
 
     @Override
@@ -126,7 +178,7 @@ public class DefaultWebPushServer implements WebPushServer {
     public Optional<Subscription> subscription(final String endpointToken) {
         try {
             final String decrypt = CryptoUtil.decrypt(privateKey, endpointToken);
-            final String[] tokens = decrypt.split("\\.");
+            final String[] tokens = decrypt.split(CryptoUtil.DELIMITER);
             final Set<Subscription> subscriptions = store.getSubscriptions(tokens[0]);
             return subscriptions.stream().filter(c -> c.id().equals(tokens[1])).findAny();
         } catch (final Exception e) {
@@ -153,8 +205,14 @@ public class DefaultWebPushServer implements WebPushServer {
         return CryptoUtil.secretKey(config.password(), keySalt);
     }
 
-    private String generateEndpointToken(final String uaid, final String subscriptionId) {
-        return CryptoUtil.endpointToken(uaid, subscriptionId, privateKey);
+    @Override
+    public String generateEndpointToken(final String value) {
+        return CryptoUtil.endpointToken(privateKey, value);
     }
 
+    @Override
+    public String generateEndpointToken(final String firstId, final String secondId) {
+        final String value = firstId + CryptoUtil.DELIMITER + secondId;
+        return CryptoUtil.endpointToken(privateKey, value);
+    }
 }

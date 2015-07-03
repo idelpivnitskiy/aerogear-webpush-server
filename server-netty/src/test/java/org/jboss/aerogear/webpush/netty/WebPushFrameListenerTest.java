@@ -23,8 +23,8 @@ import org.jboss.aerogear.webpush.AggregateSubscription.Entry;
 import org.jboss.aerogear.webpush.DefaultAggregateSubscription;
 import org.jboss.aerogear.webpush.Subscription;
 import org.jboss.aerogear.webpush.DefaultAggregateSubscription.DefaultEntry;
-import org.jboss.aerogear.webpush.Registration.Resource;
-import org.jboss.aerogear.webpush.Registration.WebLink;
+import org.jboss.aerogear.webpush.Resource;
+import org.jboss.aerogear.webpush.WebLink;
 import org.jboss.aerogear.webpush.WebPushServer;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -47,9 +47,9 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.MatcherAssert.*;
 import static org.jboss.aerogear.webpush.JsonMapper.toJson;
-import static org.jboss.aerogear.webpush.Registration.WebLink.AGGREGATE;
-import static org.jboss.aerogear.webpush.Registration.WebLink.SUBSCRIBE;
-import static org.jboss.aerogear.webpush.Registration.WebLink.REGISTRATION;
+import static org.jboss.aerogear.webpush.WebLink.AGGREGATE;
+import static org.jboss.aerogear.webpush.WebLink.SUBSCRIBE;
+import static org.jboss.aerogear.webpush.WebLink.REGISTRATION;
 import static org.jboss.aerogear.webpush.netty.WebPushFrameListener.LINK;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
@@ -609,7 +609,7 @@ public class WebPushFrameListenerTest {
     private static Http2Headers registerHeaders() {
         final Http2Headers requestHeaders = new DefaultHttp2Headers(false);
         requestHeaders.method(AsciiString.of(HttpMethod.POST.name()));
-        requestHeaders.path(asciiString("/webpush/" + Resource.REGISTER.resourceName()));
+        requestHeaders.path(asciiString("/webpush/" + Resource.SUBSCRIBE.resourceName()));
         return requestHeaders;
     }
 
@@ -684,7 +684,7 @@ public class WebPushFrameListenerTest {
     }
 
     private static String registerPath(final String registrationId) {
-        return webpushPath(Resource.REGISTER.resourceName(), registrationId);
+        return webpushPath(Resource.SUBSCRIBE.resourceName(), registrationId);
     }
 
     private static String webpushPath(final String path, final String registrationId) {

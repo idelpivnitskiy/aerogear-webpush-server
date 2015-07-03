@@ -3,7 +3,6 @@ package org.jboss.aerogear.webpush;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
-import io.netty.util.ByteString;
 import io.netty.util.CharsetUtil;
 import org.jboss.aesh.cl.CommandDefinition;
 import org.jboss.aesh.cl.Option;
@@ -59,6 +58,7 @@ public class WebPushConsole {
                 .command(aggregateCommand)
                 .command(updateCommand)
                 .command(ackCommand)
+                .command(receiptCommand)
                 .command(acksCommand)
                 .create();
 
@@ -170,7 +170,7 @@ public class WebPushConsole {
         @Option(shortName = 'p',
                 hasValue = true,
                 description = "the path that that the WebPush server exposes for subscriptions",
-                defaultValue = "/webpush/register")
+                defaultValue = "/webpush/subscribe")
         private String path;
 
         public SubscribeCommand(final ConnectCommand connectCommand) {
@@ -179,7 +179,7 @@ public class WebPushConsole {
 
         @Override
         public CommandResult execute(final CommandInvocation commandInvocation) throws IOException, InterruptedException {
-            if(help) {
+            if (help) {
                 commandInvocation.getShell().out().println(commandInvocation.getHelpInfo("subscribe"));
             } else {
                 commandInvocation.putProcessInBackground();
@@ -431,7 +431,7 @@ public class WebPushConsole {
         @Option(hasValue = false, description = "display this help and exit")
         private boolean help;
 
-        @Option(hasValue = true, description = "the receipt subscribe WebLink URL, of rel type 'urn:ietf:params:push:receipt:subscribe', from the subscribe command response", required = true)
+        @Option(hasValue = true, description = "the receipt subscribe WebLink URL, of rel type 'urn:ietf:params:push:receipt', from the subscribe command response", required = true)
         private String url;
 
         public ReceiptCommand(final ConnectCommand connectCommand) {
@@ -440,8 +440,8 @@ public class WebPushConsole {
 
         @Override
         public CommandResult execute(final CommandInvocation commandInvocation) throws IOException, InterruptedException {
-            if(help) {
-                commandInvocation.getShell().out().println(commandInvocation.getHelpInfo("monitor"));
+            if (help) {
+                commandInvocation.getShell().out().println(commandInvocation.getHelpInfo("receipt"));
             } else {
                 commandInvocation.putProcessInBackground();
                 final WebPushClient client = connectCommand.webPushClient();
@@ -529,16 +529,6 @@ public class WebPushConsole {
 
         @Override
         public void inbound(Http2Headers headers, int streamId) {
-            ByteString link = headers.getAndRemove(LINK);
-            LinkHeaderDecoder decoder = new LinkHeaderDecoder(link);
-            String pushURL = decoder.getURLByRel("urn:ietf:params:push:message");
-            if (pushURL != null) {
-                printInbound("Push: " + pushURL, streamId);
-            }
-            String receiptSubURL = decoder.getURLByRel("urn:ietf:params:push:receipt:subscribe");
-            if (receiptSubURL != null) {
-                printInbound("Receipt Subscribe: " + receiptSubURL, streamId);
-            }
             printInbound(headers.toString(), streamId);
         }
 

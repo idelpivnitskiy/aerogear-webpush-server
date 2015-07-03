@@ -24,6 +24,17 @@ import java.util.Optional;
 public interface WebPushServer {
 
     /**
+     * TODO
+     */
+    NewSubscription newSubscription();
+
+    Optional<NewSubscription> getSubscription(String subscriptionToken);
+
+    Optional<NewSubscription> subscriptionByPushToken(String pushToken);
+
+    Optional<NewSubscription> subscriptionByReceiptToken(String receiptToken);
+
+    /**
      * Registers a device with this server as per
      * <a href="https://tools.ietf.org/html/draft-thomson-webpush-http2-01#section-4.">Section 4</a> of
      * the specification.
@@ -41,7 +52,7 @@ public interface WebPushServer {
      * @param id the registration identifier.
      * @return {@code Optional} {@link Registration} with the registration or {@code Optional.empty}
      */
-    Optional<Registration> registration(final String id);
+    Optional<Registration> registration(String id);
 
     /**
      * Handles the creation of new subscriptions for a registration.
@@ -98,4 +109,7 @@ public interface WebPushServer {
      */
     WebPushServerConfig config();
 
+    String generateEndpointToken(String value);
+
+    String generateEndpointToken(String firstId, String secondId);
 }

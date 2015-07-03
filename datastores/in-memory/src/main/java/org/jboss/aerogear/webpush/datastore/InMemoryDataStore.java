@@ -17,14 +17,16 @@
 package org.jboss.aerogear.webpush.datastore;
 
 
+import org.jboss.aerogear.webpush.NewSubscription;
+import org.jboss.aerogear.webpush.Registration;
+import org.jboss.aerogear.webpush.Subscription;
+
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import org.jboss.aerogear.webpush.Subscription;
-import org.jboss.aerogear.webpush.Registration;
 
 /**
  * A {@link DataStore} implementation that stores all information in memory.
@@ -34,8 +36,20 @@ public class InMemoryDataStore implements DataStore {
     public static final byte[] EMPTY_BYTES = {};
     private final ConcurrentMap<String, Registration> registrations = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Set<Subscription>> subscriptions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, NewSubscription> newSubscriptions = new ConcurrentHashMap<>();
 
     private byte[] salt;
+
+    @Override
+    public void saveNewSubscription(NewSubscription subscription) {
+        Objects.requireNonNull(subscription, "subscription must not be null");
+        newSubscriptions.putIfAbsent(subscription.id(), subscription);
+    }
+
+    @Override
+    public Optional<NewSubscription> getNewSubscription(String id) {
+        return Optional.ofNullable(newSubscriptions.get(id));
+    }
 
     @Override
     public void savePrivateKeySalt(final byte[] salt) {

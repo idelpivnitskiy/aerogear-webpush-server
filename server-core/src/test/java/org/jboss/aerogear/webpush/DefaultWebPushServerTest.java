@@ -16,7 +16,6 @@
  */
 package org.jboss.aerogear.webpush;
 
-import org.jboss.aerogear.webpush.Registration.Resource;
 import org.jboss.aerogear.webpush.datastore.DataStore;
 import org.jboss.aerogear.webpush.datastore.InMemoryDataStore;
 import org.junit.Before;

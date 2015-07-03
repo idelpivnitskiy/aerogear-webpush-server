@@ -1,7 +1,5 @@
 package org.jboss.aerogear.webpush;
 
-import org.jboss.aerogear.webpush.util.Arguments;
-
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Objects;
@@ -61,8 +59,8 @@ public class AggregateSubscription {
         private final byte[] pubkey;
 
         public DefaultEntry(final String endpoint, final long expires, final byte[] pubkey) {
-            Arguments.checkNotNull(endpoint, "endpoint must not be null");
-            Arguments.checkNotNull(expires, "expires must not be null");
+            Objects.requireNonNull(endpoint, "endpoint must not be null");
+            Objects.requireNonNull(expires, "expires must not be null");
             this.endpoint = endpoint;
             this.expires = expires;
             this.pubkey = pubkey;

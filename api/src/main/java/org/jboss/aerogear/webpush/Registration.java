@@ -39,44 +39,4 @@ public interface Registration {
      */
     URI aggregateUri();
 
-    enum WebLink {
-        SUBSCRIBE("urn:ietf:params:push:sub"),
-        AGGREGATE("urn:ietf:params:push:aggregate"),
-        REGISTRATION("urn:ietf:params:push:reg"),
-        SUBSCRIPTION("urn:ietf:params:push");
-
-        private final String type;
-
-        WebLink(final String type) {
-            this.type = type;
-        }
-
-        @Override
-        public String toString() {
-            return type;
-        }
-
-        public String weblink(final String url) {
-            return "<" + url + ">;rel=\"" + type + "\"";
-        }
-
-    }
-
-    enum Resource {
-        REGISTER("register"),
-        AGGREGATE("aggregate"),
-        SUBSCRIBE("subscribe"),
-        REGISTRATION("reg");
-
-        private final String resourceName;
-
-        Resource(final String resourceName) {
-            this.resourceName = resourceName;
-        }
-
-        public String resourceName() {
-            return resourceName;
-        }
-    }
-
 }
