@@ -40,8 +40,6 @@ public class WebPushConsole {
         final MonitorCommand monitorCommand = new MonitorCommand(connectCommand);
         final NotifyCommand notifyCommand = new NotifyCommand(connectCommand);
         final DeleteSubCommand deleteSubCommand = new DeleteSubCommand(connectCommand);
-        final AggregateCommand aggregateCommand = new AggregateCommand(connectCommand);
-        final UpdateCommand updateCommand = new UpdateCommand(connectCommand);
         final AckCommand ackCommand = new AckCommand(connectCommand);
         final ReceiptCommand receiptCommand = new ReceiptCommand(connectCommand);
         final AcksCommand acksCommand = new AcksCommand(connectCommand);
@@ -55,8 +53,6 @@ public class WebPushConsole {
                 .command(monitorCommand)
                 .command(notifyCommand)
                 .command(deleteSubCommand)
-                .command(aggregateCommand)
-                .command(updateCommand)
                 .command(ackCommand)
                 .command(receiptCommand)
                 .command(acksCommand)
@@ -315,83 +311,6 @@ public class WebPushConsole {
         }
     }
 
-    @CommandDefinition(name = "aggregate", description = "multiple channels so they are handled as one")
-    public static class AggregateCommand implements Command {
-        private final ConnectCommand connectCommand;
-
-        @Option(hasValue = false, description = "display this help and exit")
-        private boolean help;
-
-        @Option(hasValue = true, description = "the aggreagate url from an earlier 'subscribe' commands location response", required = true)
-        private String url;
-
-        @Option(hasValue = true, description = "comma separated list of channels that should be part of this aggreagate channel")
-        private String channels;
-
-        public AggregateCommand(final ConnectCommand connectCommand) {
-            this.connectCommand = connectCommand;
-        }
-
-        @Override
-        public CommandResult execute(final CommandInvocation commandInvocation) throws IOException, InterruptedException {
-            if(help) {
-                commandInvocation.getShell().out().println(commandInvocation.getHelpInfo("aggregate"));
-            } else {
-                commandInvocation.putProcessInBackground();
-                final WebPushClient client = connectCommand.webPushClient();
-                if (!isConnected(client, commandInvocation)) {
-                    return CommandResult.FAILURE;
-                }
-                try {
-                    final String json = JsonMapper.toJson(AggregateSubscription.from(channels));
-                    client.createAggregateSubscription(url, json);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    return CommandResult.FAILURE;
-                }
-            }
-            return CommandResult.SUCCESS;
-        }
-    }
-
-    @CommandDefinition(name = "update", description = "an existing notification")
-    public static class UpdateCommand implements Command {
-        private final ConnectCommand connectCommand;
-
-        @Option(hasValue = false, description = "display this help and exit")
-        private boolean help;
-
-        @Option(hasValue = true, description = "the push message URL, from the notify command location response", required = true)
-        private String url;
-
-        @Option(hasValue = true, description = "the new notification payload")
-        private String payload;
-
-        public UpdateCommand(final ConnectCommand connectCommand) {
-            this.connectCommand = connectCommand;
-        }
-
-        @Override
-        public CommandResult execute(final CommandInvocation commandInvocation) throws IOException, InterruptedException {
-            if(help) {
-                commandInvocation.getShell().out().println(commandInvocation.getHelpInfo("update"));
-            } else {
-                commandInvocation.putProcessInBackground();
-                final WebPushClient client = connectCommand.webPushClient();
-                if (!isConnected(client, commandInvocation)) {
-                    return CommandResult.FAILURE;
-                }
-                try {
-                    client.updateNotification(url, payload);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    return CommandResult.FAILURE;
-                }
-            }
-            return CommandResult.SUCCESS;
-        }
-    }
-
     @CommandDefinition(name = "ack", description = "a received message")
     public static class AckCommand implements Command {
       private final ConnectCommand connectCommand;
@@ -469,9 +388,7 @@ public class WebPushConsole {
         @Option(hasValue = false, description = "display this help and exit")
         private boolean help;
 
-        @Option(hasValue = true, description =
-
-        "the receipt subscription URL, from the receipt command response", required = true)
+        @Option(hasValue = true, description = "the receipt subscription URL, from the receipt command response", required = true)
         private String url;
 
         public AcksCommand(final ConnectCommand connectCommand) {
