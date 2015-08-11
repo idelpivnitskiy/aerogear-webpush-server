@@ -390,14 +390,16 @@ public class WebPushConsole {
         }
     }
 
-    @CommandDefinition(name = "delete", description = "subscription")
+    @CommandDefinition(name = "delete", description = "push message or receipt subscription")
     public static class DeleteSubCommand implements Command {
         private final ConnectCommand connectCommand;
 
         @Option(hasValue = false, description = "display this help and exit")
         private boolean help;
 
-        @Option(hasValue = true, description = "the endpoint url for the subscription to be deleted", required = true)
+        @Option(hasValue = true,
+                description = "a push message (/s) or receipt (/r) subscription URI for the subscription to be deleted",
+                required = true)
         private String url;
 
         public DeleteSubCommand(final ConnectCommand connectCommand) {
