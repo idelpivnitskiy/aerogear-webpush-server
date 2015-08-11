@@ -25,7 +25,7 @@ public enum Resource {
     RECEIPTS("receipts"),
     RECEIPT("r"),
     AGGREGATE("aggregate"),
-    REGISTRATION("reg");
+    REGISTRATION("reg");    //FIXME remove
 
     private final String resourceName;
 

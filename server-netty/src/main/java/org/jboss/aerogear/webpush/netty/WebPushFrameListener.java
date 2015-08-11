@@ -60,7 +60,6 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpResponseStatus.REQUEST_ENTITY_TOO_LARGE;
 import static io.netty.util.CharsetUtil.UTF_8;
 import static org.jboss.aerogear.webpush.JsonMapper.fromJson;
-import static org.jboss.aerogear.webpush.WebPushServerConfig.MESSAGE_MAX_LOWER_BOUND;
 
 public class WebPushFrameListener extends Http2FrameAdapter {
 
@@ -205,7 +204,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                     }
                 }
                 final int readableBytes = data.readableBytes();
-                if (readableBytes > webpushServer.config().messageMaxSize() && !(readableBytes <= MESSAGE_MAX_LOWER_BOUND)) {   //FIXME
+                if (readableBytes > webpushServer.config().messageMaxSize()) {
                     encoder.writeHeaders(ctx, streamId, messageToLarge(), 0, true, ctx.newPromise());
                 } else {
                     String pushMessageId = UUID.randomUUID().toString();
@@ -255,7 +254,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                                     final int padding,
                                     final String path) {
         final int readableBytes = data.readableBytes();
-        if (readableBytes > webpushServer.config().messageMaxSize() && !(readableBytes <= MESSAGE_MAX_LOWER_BOUND)) {   //FIXME
+        if (readableBytes > webpushServer.config().messageMaxSize()) {
             encoder.writeHeaders(ctx, streamId, messageToLarge(), 0, true, ctx.newPromise());
         } else {
             final String endpoint = extractEndpointToken(path);
