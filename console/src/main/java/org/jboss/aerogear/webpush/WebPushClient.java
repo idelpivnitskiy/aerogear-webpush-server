@@ -160,11 +160,13 @@ public final class WebPushClient {
 
     private void writeJsonRequest(final HttpMethod method, final String url, final ByteBuf payload) throws Exception {
         final Http2Headers headers = http2Headers(method, url);
-        writeRequest(headers, payload);
+        handler.outbound(headers, payload);
+        ChannelFuture requestFuture = channel.writeAndFlush(new WebPushMessage(headers, payload)).sync();
+        requestFuture.sync();
     }
 
     private void writeRequest(final Http2Headers headers, final ByteBuf payload) throws Exception {
-        handler.outbound(headers, payload);
+        handler.outbound(headers);
         ChannelFuture requestFuture = channel.writeAndFlush(new WebPushMessage(headers, payload)).sync();
         requestFuture.sync();
     }
