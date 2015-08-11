@@ -148,11 +148,20 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 }
                 break;
             case DELETE:
+                switch (resource) {
+                    case PUSH_MESSAGE:
+                        handleAcknowledgement(ctx, streamId, path);
+                        return;
+                }
                 handleSubscriptionRemoval(ctx, path, streamId);
                 break;
             case PUT:
                 break;
         }
+    }
+
+    private void handleAcknowledgement(ChannelHandlerContext ctx, int streamId, String path) {
+        //TODO the push server MUST deliver a response to the application server monitoring the receipt subscription resource
     }
 
     private static Resource getResource(String path) {
