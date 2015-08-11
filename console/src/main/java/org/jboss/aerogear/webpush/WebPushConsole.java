@@ -217,7 +217,7 @@ public class WebPushConsole {
 
         @Override
         public CommandResult execute(final CommandInvocation commandInvocation) throws IOException, InterruptedException {
-            if(help) {
+            if (help) {
                 commandInvocation.getShell().out().println(commandInvocation.getHelpInfo("monitor"));
             } else {
                 commandInvocation.putProcessInBackground();
@@ -243,14 +243,17 @@ public class WebPushConsole {
         @Option(hasValue = false, description = "display this help and exit")
         private boolean help;
 
-        @Option(hasValue = true, description = "the push WebLink URL, of rel type 'urn:ietf:params:push:message', from the subscribe command response", required = true)
+        @Option(hasValue = true, description = "the push WebLink URL, of rel type 'urn:ietf:params:push', from the subscribe command response", required = true)
         private String url;
 
-        @Option(hasValue = true, description = "the body/payload of the notification")
+        @Option(hasValue = true, description = "the body/payload of the notification", required = true)
         private String payload;
 
         @Option(hasValue = true, description = "the notification receipt URL")
         private String receiptUrl;
+
+        @Option(hasValue = true, description = "the Time-To-Live (TTL) period in seconds for the notification")
+        private int ttl;
 
         public NotifyCommand(final ConnectCommand connectCommand) {
             this.connectCommand = connectCommand;
@@ -258,7 +261,7 @@ public class WebPushConsole {
 
         @Override
         public CommandResult execute(final CommandInvocation commandInvocation) throws IOException, InterruptedException {
-            if(help) {
+            if (help) {
                 commandInvocation.getShell().out().println(commandInvocation.getHelpInfo("notify"));
             } else {
                 commandInvocation.putProcessInBackground();
@@ -267,7 +270,7 @@ public class WebPushConsole {
                     return CommandResult.FAILURE;
                 }
                 try {
-                    client.notify(url, payload, receiptUrl);
+                    client.notify(url, payload, receiptUrl, ttl);
                 } catch (Exception e) {
                     e.printStackTrace();
                     return CommandResult.FAILURE;

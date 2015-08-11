@@ -53,7 +53,8 @@ import static io.netty.util.CharsetUtil.UTF_8;
 
 public final class WebPushClient {
 
-    private static final AsciiString PUSH_RECEIPT_HEADER = new AsciiString("push-receipt");
+    private static final AsciiString PUSH_RECEIPT_HEADER = new AsciiString("Push-Receipt");
+    private static final AsciiString TTL_HEADER = new AsciiString("TTL");
 
     private final String host;
     private final int port;
@@ -116,10 +117,13 @@ public final class WebPushClient {
         writeJsonRequest(POST, aggregateUrl, copiedBuffer(json, UTF_8));
     }
 
-    public void notify(final String endpointUrl, final String payload, final String receiptUrl) throws Exception {
+    public void notify(final String endpointUrl, final String payload, final String receiptUrl, int ttl) throws Exception {
         final Http2Headers headers = http2Headers(POST, endpointUrl);
         if (receiptUrl != null) {
             headers.add(PUSH_RECEIPT_HEADER, AsciiString.of(receiptUrl));
+        }
+        if (ttl > 0) {
+            headers.add(TTL_HEADER, AsciiString.of(String.valueOf(ttl)));
         }
         writeRequest(headers, copiedBuffer(payload, UTF_8));
     }
