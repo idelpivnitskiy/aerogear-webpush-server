@@ -107,8 +107,7 @@ public class DefaultWebPushServer implements WebPushServer {
         final String stringId = urlEncodeId(id);
         final DefaultRegistration reg = new DefaultRegistration(id,
                 regUri(stringId),
-                subscribeUri(stringId),
-                aggregateUri(stringId));
+                subscribeUri(stringId));
         store.saveRegistration(reg);
         return reg;
     }
@@ -124,10 +123,6 @@ public class DefaultWebPushServer implements WebPushServer {
 
     private static URI subscribeUri(final String id) {
         return webpushURI(id, Resource.SUBSCRIBE.resourceName());
-    }
-
-    private static URI aggregateUri(final String id) {
-        return webpushURI(id, Resource.AGGREGATE.resourceName());
     }
 
     private static URI webpushURI(final String registrationId, final String resource) {

@@ -47,7 +47,6 @@ public class DefaultWebPushServerTest {
         assertThat(reg.id(), is(notNullValue()));
         assertThat(reg.uri().toString(), equalTo(webPushUrl(Resource.REGISTRATION, reg.id())));
         assertThat(reg.subscribeUri().toString(), equalTo(webPushUrl(Resource.SUBSCRIBE, reg.id())));
-        assertThat(reg.aggregateUri().toString(), equalTo(webPushUrl(Resource.AGGREGATE, reg.id())));
     }
 
     private static String webPushUrl(final Resource resource, final String regId) {

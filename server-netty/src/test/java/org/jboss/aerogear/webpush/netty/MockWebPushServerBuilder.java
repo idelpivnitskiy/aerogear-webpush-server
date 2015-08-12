@@ -33,7 +33,6 @@ public class MockWebPushServerBuilder {
     private void setRegistrationUrls(final String id) {
         when(registration.uri()).thenReturn(asURI(context, Resource.REGISTRATION.resourceName(), id));
         when(registration.subscribeUri()).thenReturn(asURI(context, Resource.SUBSCRIBE.resourceName(), id));
-        when(registration.aggregateUri()).thenReturn(asURI(context, Resource.AGGREGATE.resourceName(), id));
     }
 
     public MockWebPushServerBuilder registrationMaxAge(final long maxAge) {

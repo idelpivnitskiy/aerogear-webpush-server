@@ -84,8 +84,7 @@ public class WebPushFrameListenerTest {
         assertThat(responseHeaders.get(LOCATION), equalTo(asciiString(registrationPath(regId))));
         assertThat(responseHeaders.getAll(LINK), hasItems(
                 asciiString(REGISTRATION.weblink(registrationPath(regId))),
-                asciiString(SUBSCRIBE.weblink(subscribePath(regId))),
-                asciiString(AGGREGATE.weblink(aggregatePath(regId)))));
+                asciiString(SUBSCRIBE.weblink(subscribePath(regId)))));
         assertThat(responseHeaders.get(CACHE_CONTROL), equalTo(asciiString("private, max-age=10000")));
         frameListener.shutdown();
     }
@@ -257,8 +256,7 @@ public class WebPushFrameListenerTest {
         final Http2Headers monitorHeaders = captor.getValue();
         assertThat(monitorHeaders.status(), equalTo(OK.codeAsText()));
         assertThat(monitorHeaders.getAll(LINK), hasItems(
-                asciiString(SUBSCRIBE.weblink(subscribePath(regId))),
-                asciiString(AGGREGATE.weblink(aggregatePath(regId)))));
+                asciiString(SUBSCRIBE.weblink(subscribePath(regId)))));
         assertThat(monitorHeaders.get(CACHE_CONTROL), equalTo(asciiString("private, max-age=10000")));
         frameListener.shutdown();
     }
@@ -325,8 +323,7 @@ public class WebPushFrameListenerTest {
                 .build());
         final Http2ConnectionEncoder encoder = mockEncoder(w -> w.thenReturn(registerPath(regId))
                 .thenReturn(subscribePath(regId))
-                .thenReturn(subscribePath(regId))
-                .thenReturn(aggregatePath(regId)));
+                .thenReturn(subscribePath(regId)));
         frameListener.encoder(encoder);
         final Http2Headers regHeaders = register(frameListener, ctx, encoder);
         final String endpoint1 = subscribe(frameListener, ctx, regHeaders, encoder).get(LOCATION).toString();
@@ -433,7 +430,6 @@ public class WebPushFrameListenerTest {
             final Http2ConnectionEncoder encoder = mockEncoder(w -> w.thenReturn(registerPath(regId))
                     .thenReturn(subscribePath(regId))
                     .thenReturn(subscribePath(regId))
-                    .thenReturn(aggregatePath(regId))
                     .thenReturn(webpushPath(subId)));
             frameListener.encoder(encoder);
 
@@ -677,10 +673,6 @@ public class WebPushFrameListenerTest {
 
     private static String subscribePath(final String registrationId) {
         return webpushPath(Resource.SUBSCRIBE.resourceName(), registrationId);
-    }
-
-    private static String aggregatePath(final String registrationId) {
-        return webpushPath(Resource.AGGREGATE.resourceName(), registrationId);
     }
 
     private static String registerPath(final String registrationId) {
