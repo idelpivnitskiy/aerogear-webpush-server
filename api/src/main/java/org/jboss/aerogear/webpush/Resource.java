@@ -24,7 +24,6 @@ public enum Resource {
     PUSH_MESSAGE("d"),
     RECEIPTS("receipts"),
     RECEIPT("r"),
-    AGGREGATE("aggregate"),
     REGISTRATION("reg");    //FIXME remove
 
     private final String resourceName;
