@@ -64,10 +64,9 @@ public class WebPushFrameListener extends Http2FrameAdapter {
 
     private static final String WEBPUSH_URI = "/webpush/";
     private static final AsciiString ANY_ORIGIN = new AsciiString("*");
-    private static final AsciiString EXPOSE_HEADERS = new AsciiString("Link, Cache-Control, Location");
-    private static final AsciiString PUSH_RECEIPT_HEADER = new AsciiString("Push-Receipt");
-    private static final AsciiString TTL_HEADER = new AsciiString("TTL");
-    private static final AsciiString AGGREGATION_JSON = new AsciiString("application/push-aggregation+json");
+    private static final AsciiString EXPOSE_HEADERS = new AsciiString("link, cache-control, location");
+    private static final AsciiString PUSH_RECEIPT_HEADER = new AsciiString("push-receipt");
+    private static final AsciiString TTL_HEADER = new AsciiString("ttl");
     private static final AttributeKey<String> REG_ID = AttributeKey.valueOf("regId");
     private static final AttributeKey<String> SUBSCRIPTION_ID = AttributeKey.valueOf("subscriptionId");
     private static final AsciiString PREFER = new AsciiString("prefer");

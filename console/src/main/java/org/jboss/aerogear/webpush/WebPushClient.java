@@ -52,8 +52,8 @@ import static io.netty.util.CharsetUtil.UTF_8;
 
 public final class WebPushClient {
 
-    private static final AsciiString PUSH_RECEIPT_HEADER = new AsciiString("Push-Receipt");
-    private static final AsciiString TTL_HEADER = new AsciiString("TTL");
+    private static final AsciiString PUSH_RECEIPT_HEADER = new AsciiString("push-receipt");
+    private static final AsciiString TTL_HEADER = new AsciiString("ttl");
 
     private final String host;
     private final int port;
