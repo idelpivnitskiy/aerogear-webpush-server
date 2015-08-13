@@ -54,6 +54,8 @@ public final class WebPushClient {
 
     private static final AsciiString PUSH_RECEIPT_HEADER = new AsciiString("push-receipt");
     private static final AsciiString TTL_HEADER = new AsciiString("ttl");
+    private static final AsciiString PREFER_HEADER = new AsciiString("prefer");
+    private static final AsciiString PREFER_HEADER_VALUE = new AsciiString("wait=0");
 
     private final String host;
     private final int port;
@@ -99,7 +101,7 @@ public final class WebPushClient {
     public void monitor(final String monitorUrl, final boolean now) throws Exception {
         final Http2Headers headers = http2Headers(GET, monitorUrl);
         if (now) {
-            headers.add(new AsciiString("prefer"), new AsciiString("wait=0"));
+            headers.add(PREFER_HEADER, PREFER_HEADER_VALUE);
         }
         writeRequest(headers);
     }
@@ -114,11 +116,11 @@ public final class WebPushClient {
 
     public void notify(final String endpointUrl, final String payload, final String receiptUrl, int ttl) throws Exception {
         final Http2Headers headers = http2Headers(POST, endpointUrl);
-        if (receiptUrl != null) {
+        if (receiptUrl != null && !receiptUrl.isEmpty()) {
             headers.add(PUSH_RECEIPT_HEADER, AsciiString.of(receiptUrl));
         }
         if (ttl > 0) {
-            headers.add(TTL_HEADER, AsciiString.of(String.valueOf(ttl)));
+            headers.addInt(TTL_HEADER, ttl);
         }
         writeRequest(headers, copiedBuffer(payload, UTF_8));
     }
