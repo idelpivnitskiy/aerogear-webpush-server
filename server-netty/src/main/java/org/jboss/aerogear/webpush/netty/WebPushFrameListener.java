@@ -159,10 +159,10 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                         handleAcknowledgement(ctx, streamId, path);
                         return;
                     case SUBSCRIPTION:
-                        handlePushMessageSubscriptionRemoval(ctx, path, streamId);
+                        handlePushMessageSubscriptionRemoval(ctx, streamId, path);
                         return;
                     case RECEIPT:
-                        handleReceiptSubscriptionRemoval(ctx, path, streamId);
+                        handleReceiptSubscriptionRemoval(ctx, streamId, path);
                         return;
                 }
                 break;
@@ -324,8 +324,9 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         //TODO the push server MUST deliver a response to the application server monitoring the receipt subscription resource
     }
 
-    private void handlePushMessageSubscriptionRemoval(final ChannelHandlerContext ctx, final String path,
-            final int streamId) {
+    private void handlePushMessageSubscriptionRemoval(final ChannelHandlerContext ctx,
+                                                      final int streamId,
+                                                      final String path) {
         //FIXME use newSubscription
         final String endpointToken = extractEndpointToken(path);
         final Optional<Subscription> subscription = webpushServer.subscription(endpointToken);
@@ -338,9 +339,18 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         }
     }
 
-    private void handleReceiptSubscriptionRemoval(final ChannelHandlerContext ctx, final String path,
-            final int streamId) {
-        //TODO handleReceiptSubscriptionRemoval
+    private void handleReceiptSubscriptionRemoval(final ChannelHandlerContext ctx,
+                                                  final int streamId,
+                                                  final String path) {
+        Optional<String> receiptTokenOpt = extractToken(path);
+        Client client = acksStreams.remove(receiptTokenOpt.get());
+        if (client != null) {
+            ctx.attr(RECEIPT_SUBSCRIPTION_ID).remove();
+            LOGGER.info("Removed application server registration for acks={}", client);
+        }
+        encoder.writeHeaders(ctx, streamId,
+                client != null ? noContentHeaders() : notFoundHeaders(),
+                0, true, ctx.newPromise());
     }
 
     private static Http2Headers resourceHeaders(Resource resource, String resourceToken, AsciiString exposeHeaders) {
@@ -378,8 +388,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     }
 
     private static Http2Headers messageToLarge() {
-        return new DefaultHttp2Headers(false)
-                .status(REQUEST_ENTITY_TOO_LARGE.codeAsText())
+        return new DefaultHttp2Headers(false).status(REQUEST_ENTITY_TOO_LARGE.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN);
     }
 
