@@ -62,10 +62,15 @@ public class DefaultWebPushServer implements WebPushServer {
     }
 
     @Override
-    public Optional<NewSubscription> getSubscription(String subscriptionToken) {
+    public Optional<NewSubscription> subscriptionById(String subscriptionId) {
+        return store.getNewSubscription(subscriptionId);
+    }
+
+    @Override
+    public Optional<NewSubscription> subscriptionByToken(String subscriptionToken) {
         try {
             String subscriptionId = CryptoUtil.decrypt(privateKey, subscriptionToken);
-            return store.getNewSubscription(subscriptionId);
+            return subscriptionById(subscriptionId);
         } catch (Exception e) {
             LOGGER.debug(e.getMessage(), e);
         }

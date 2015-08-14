@@ -180,7 +180,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 endOfStream);
         switch (resource) {
             case PUSH:
-                handlePush(ctx, streamId, path, data, padding); //FIXME rename to handleNotify
+                handlePush(ctx, streamId, path, data, padding);
                 break;
         }
         return super.onDataRead(ctx, streamId, data, padding, endOfStream);
@@ -310,7 +310,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         Optional<String> receiptsToken = extractToken(path);
         receiptsToken.ifPresent(e -> {
             String subscriptionToken = receiptsToken.get();
-            Optional<NewSubscription> subscription = webpushServer.getSubscription(subscriptionToken);
+            Optional<NewSubscription> subscription = webpushServer.subscriptionByToken(subscriptionToken);
             subscription.ifPresent(sub -> {
                 String receiptResourceId = UUID.randomUUID().toString();   //FIXME need save?
                 String receiptResourceToken = webpushServer.generateEndpointToken(receiptResourceId, sub.id());
@@ -415,7 +415,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                                final int streamId,
                                final int padding,
                                final Http2Headers headers) {
-        Optional<NewSubscription> subscription = extractToken(path).flatMap(webpushServer::getSubscription);
+        Optional<NewSubscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionById);
         subscription.ifPresent(sub -> {
             final int pushStreamId = encoder.connection().local().nextStreamId();
             final Client client = new Client(ctx, pushStreamId, encoder);
@@ -472,15 +472,6 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 .status(OK.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN)
                 .set(ACCESS_CONTROL_EXPOSE_HEADERS, CONTENT_TYPE);
-    }
-
-    private static Optional<String> extractRegistrationId(final String path, final String segment) {
-        try {
-            final String subpath = path.substring(path.indexOf(segment) + segment.length() + 1);
-            return Optional.of(subpath.subSequence(subpath.lastIndexOf('/') + 1, subpath.length()).toString());
-        } catch (Exception e) {
-            return Optional.empty();
-        }
     }
 
     private static String extractEndpointToken(final String path) {

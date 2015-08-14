@@ -29,7 +29,9 @@ public interface WebPushServer {
      */
     NewSubscription newSubscription();
 
-    Optional<NewSubscription> getSubscription(String subscriptionToken);
+    Optional<NewSubscription> subscriptionById(String subscriptionId);
+
+    Optional<NewSubscription> subscriptionByToken(String subscriptionToken);
 
     Optional<NewSubscription> subscriptionByPushToken(String pushToken);
 
