@@ -72,10 +72,10 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private static final AsciiString PUSH_RECEIPT_HEADER = new AsciiString("push-receipt");
     private static final AsciiString TTL_HEADER = new AsciiString("ttl");
     private static final AsciiString PREFER_HEADER = new AsciiString("prefer");
-    private static final AttributeKey<String> REG_ID = AttributeKey.valueOf("regId");
-    private static final AttributeKey<String> SUBSCRIPTION_ID = AttributeKey.valueOf("subscriptionId");
+    private static final AttributeKey<String> SUB_ID = AttributeKey.valueOf("subId");
 
     private static final ConcurrentHashMap<String, Client> monitoredStreams = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Client> acksStreams = new ConcurrentHashMap<>();
 
     private static final String GET = "GET";
     private static final String POST = "POST";
@@ -126,10 +126,10 @@ public class WebPushFrameListener extends Http2FrameAdapter {
             case GET:
                 switch (resource) {
                     case SUBSCRIPTION:
-                        handleReceivingPushMessages(ctx, path, streamId, headers);
+                        handleReceivingPushMessages(ctx, streamId, headers, path);
                         return;
                     case RECEIPT:
-//                        handleReceivingPushMessageReceipts(ctx, path, streamId, padding, headers);
+                        handleReceivingPushMessageReceipts(ctx, streamId, path);
                         return;
                 }
                 break;
@@ -257,16 +257,18 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     public void shutdown() {
         monitoredStreams.values().stream().forEach(client -> client.ctx.close());
         monitoredStreams.clear();
+        acksStreams.values().stream().forEach(client -> client.ctx.close());
+        acksStreams.clear();
     }
 
     public void disconnect(final ChannelHandlerContext ctx) {
-        final Optional<String> regId = Optional.ofNullable(ctx.attr(REG_ID).get());
-        if (regId.isPresent()) {
-            final Client client = monitoredStreams.remove(regId.get());
+        final Optional<String> subId = Optional.ofNullable(ctx.attr(SUB_ID).get());
+        subId.ifPresent(sId -> {
+            final Client client = monitoredStreams.remove(sId);
             if (client != null) {
-                LOGGER.info("Removed client regId{}", client);
+                LOGGER.info("Removed client w/ subId={}: {}", sId, client);
             }
-        }
+        });
         LOGGER.info("Disconnected channel {}", ctx.channel().id());
     }
 
@@ -282,7 +284,6 @@ public class WebPushFrameListener extends Http2FrameAdapter {
 
     private void handleSubscribe(final ChannelHandlerContext ctx, final int streamId) {
         NewSubscription subscription = webpushServer.newSubscription();
-        ctx.attr(SUBSCRIPTION_ID).set(subscription.id());
         encoder.writeHeaders(ctx, streamId, subscriptionHeaders(subscription), 0, true, ctx.newPromise());
         LOGGER.info("Subscription for Push Messages: {}", subscription);
     }
@@ -392,22 +393,24 @@ public class WebPushFrameListener extends Http2FrameAdapter {
       previous client-initiated request (the monitor request)
      */
     private void handleReceivingPushMessages(final ChannelHandlerContext ctx,
-                               final String path,
                                final int streamId,
-                               final Http2Headers headers) {
+                               final Http2Headers headers,
+                               final String path) {
         Optional<NewSubscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionById);
         subscription.ifPresent(sub -> {
             final Client client = new Client(ctx, streamId, encoder);
             monitoredStreams.put(sub.id(), client);
+            ctx.attr(SUB_ID).set(sub.id());
             LOGGER.info("Registered client={}", client);
+
             List<PushMessage> newMessages = null;
             while (!(newMessages = webpushServer.waitingDeliveryMessages(sub.id())).isEmpty()) {
                 for (PushMessage pushMessage : newMessages) {
                     receivePushMessage(pushMessage, client);
                 }
             }
-            final Optional<ByteString> wait =
-                    Optional.ofNullable(headers.get(PREFER_HEADER)).filter(val -> "wait=0".equals(val.toString()));  //FIXME improve
+            final Optional<ByteString> wait = Optional.ofNullable(headers.get(PREFER_HEADER))
+                                                      .filter(val -> "wait=0".equals(val.toString()));  //FIXME improve
             wait.ifPresent(s -> {
                 encoder.writeHeaders(ctx, streamId, noContentHeaders(), 0, true, ctx.newPromise());
                 LOGGER.info("204 No Content has sent to client={}", client);
@@ -434,6 +437,15 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         return new DefaultHttp2Headers(false)
                 .status(NO_CONTENT.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN);
+    }
+
+    private void handleReceivingPushMessageReceipts(final ChannelHandlerContext ctx,
+                                                    final int streamId,
+                                                    final String path) {
+        Optional<NewSubscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionByReceiptToken);
+        subscription.ifPresent(sub -> {
+            final Client client = new Client(ctx, streamId, encoder);
+        });
     }
 
     private static Http2Headers notFoundHeaders() {
