@@ -179,7 +179,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 endOfStream);
         switch (resource) {
             case PUSH:
-                handlePush(ctx, streamId, path, data, padding);
+                handlePush(ctx, streamId, path, data);
                 break;
         }
         return super.onDataRead(ctx, streamId, data, padding, endOfStream);
@@ -212,7 +212,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         return Optional.empty();
     }
 
-    private void handlePush(ChannelHandlerContext ctx, int streamId, String path, ByteBuf data, int padding) {
+    private void handlePush(ChannelHandlerContext ctx, int streamId, String path, ByteBuf data) {
         Optional<NewSubscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionByPushToken);
         subscription.ifPresent(sub -> {
             Http2Stream stream = encoder.connection().stream(streamId);
