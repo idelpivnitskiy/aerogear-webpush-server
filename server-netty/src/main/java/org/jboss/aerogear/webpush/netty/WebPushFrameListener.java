@@ -65,6 +65,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private static final AsciiString ANY_ORIGIN = new AsciiString("*");
     private static final AsciiString EXPOSE_HEADERS = new AsciiString("link, cache-control, location"); //FIXME rename
     private static final AsciiString EXPOSE_HEADERS_SHORT = new AsciiString("cache-control, content-type"); //FIXME rename
+    private static final AsciiString EXPOSE_HEADERS_LOCATION = new AsciiString("location"); //FIXME rename
     private static final AsciiString CONTENT_TYPE_VALUE = new AsciiString("text/plain;charset=utf8");
     private static final AsciiString PUSH_RECEIPT_HEADER = new AsciiString("push-receipt");
     private static final AsciiString TTL_HEADER = new AsciiString("ttl");
@@ -257,7 +258,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private Http2Headers pushMessageHeaders(PushMessage pushMessage) {
         String pushMessageToken = webpushServer
                 .generateEndpointToken(pushMessage.id(), pushMessage.subscription());
-        return resourceHeaders(Resource.PUSH_MESSAGE, pushMessageToken);
+        return resourceHeaders(Resource.PUSH_MESSAGE, pushMessageToken, EXPOSE_HEADERS_LOCATION);
     }
 
     public void shutdown() {
@@ -296,8 +297,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private Http2Headers subscriptionHeaders(NewSubscription subscription) {
         String pushToken = webpushServer.generateEndpointToken(subscription.pushResourceId(), subscription.id());
         String receiptsToken = webpushServer.generateEndpointToken(subscription.id());
-        return resourceHeaders(Resource.SUBSCRIPTION, subscription.id())
-                .set(ACCESS_CONTROL_EXPOSE_HEADERS, EXPOSE_HEADERS)
+        return resourceHeaders(Resource.SUBSCRIPTION, subscription.id(), EXPOSE_HEADERS)
                 .set(LINK_HEADER, asLink(webpushUri(Resource.PUSH, pushToken), WebLink.PUSH),
                         asLink(webpushUri(Resource.RECEIPTS, receiptsToken), WebLink.RECEIPTS))
                 .set(CACHE_CONTROL, privateCacheWithMaxAge(webpushServer.config().registrationMaxAge()));
@@ -318,7 +318,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     }
 
     private static Http2Headers receiptsHeaders(String receiptResourceToken) {
-        return resourceHeaders(Resource.RECEIPT, receiptResourceToken);
+        return resourceHeaders(Resource.RECEIPT, receiptResourceToken, EXPOSE_HEADERS_LOCATION);
     }
 
     private void handleAcknowledgement(ChannelHandlerContext ctx, int streamId, String path) {
@@ -344,10 +344,11 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         //TODO handleReceiptSubscriptionRemoval
     }
 
-    private static Http2Headers resourceHeaders(Resource resource, String resourceToken) {
+    private static Http2Headers resourceHeaders(Resource resource, String resourceToken, AsciiString exposeHeaders) {
         return new DefaultHttp2Headers(false)
                 .status(CREATED.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN)
+                .set(ACCESS_CONTROL_EXPOSE_HEADERS, exposeHeaders)
                 .set(LOCATION, webpushUri(resource, resourceToken));
     }
 
@@ -375,13 +376,6 @@ public class WebPushFrameListener extends Http2FrameAdapter {
             return Optional.empty();
         }
         return Optional.of(path.substring(idx + 1));
-    }
-
-    private Http2Headers acceptedHeaders() {
-        return new DefaultHttp2Headers(false)
-                .status(OK.codeAsText())
-                .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN)
-                .set(CACHE_CONTROL, privateCacheWithMaxAge(webpushServer.config().messageMaxAge()));
     }
 
     private static Http2Headers messageToLarge() {
