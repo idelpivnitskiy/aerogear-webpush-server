@@ -17,9 +17,11 @@
 package org.jboss.aerogear.webpush.datastore;
 
 import org.jboss.aerogear.webpush.NewSubscription;
+import org.jboss.aerogear.webpush.PushMessage;
 import org.jboss.aerogear.webpush.Registration;
 import org.jboss.aerogear.webpush.Subscription;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -31,6 +33,14 @@ public interface DataStore {
     void saveNewSubscription(NewSubscription subscription);
 
     Optional<NewSubscription> getNewSubscription(String id);
+
+    void saveMessage(PushMessage msg);
+
+    List<PushMessage> waitingDeliveryMessages(String subId);
+
+    void saveSentMessage(PushMessage msg);
+
+    Optional<PushMessage> sentMessage(String subId, String msgId);
 
     /**
      * Saves the server's private key salt.

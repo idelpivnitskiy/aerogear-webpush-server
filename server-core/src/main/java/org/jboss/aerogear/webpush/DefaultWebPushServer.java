@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URLEncoder;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -49,7 +50,7 @@ public class DefaultWebPushServer implements WebPushServer {
     }
 
     /**
-     * TODO
+     * TODO add comments
      */
     @Override
     public NewSubscription newSubscription() {
@@ -95,6 +96,33 @@ public class DefaultWebPushServer implements WebPushServer {
             String decrypt = CryptoUtil.decrypt(privateKey, receiptToken);
             String[] tokens = decrypt.split(CryptoUtil.DELIMITER);
             return store.getNewSubscription(tokens[1]);
+        } catch (final Exception e) {
+            LOGGER.debug(e.getMessage(), e);
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public void saveMessage(PushMessage msg) {
+        store.saveMessage(msg);
+    }
+
+    @Override
+    public List<PushMessage> waitingDeliveryMessages(String subId) {
+        return store.waitingDeliveryMessages(subId);
+    }
+
+    @Override
+    public void saveSentMessage(PushMessage msg) {
+        store.saveSentMessage(msg);
+    }
+
+    @Override
+    public Optional<PushMessage> sentMessage(String pushMsgResource) {
+        try {
+            String decrypt = CryptoUtil.decrypt(privateKey, pushMsgResource);
+            String[] tokens = decrypt.split(CryptoUtil.DELIMITER);
+            return store.sentMessage(tokens[1], tokens[0]);
         } catch (final Exception e) {
             LOGGER.debug(e.getMessage(), e);
         }
@@ -161,12 +189,8 @@ public class DefaultWebPushServer implements WebPushServer {
 
     @Override
     public void setMessage(final String endpointToken, final Optional<String> content) {
-        subscription(endpointToken).ifPresent(ch ->
-                        store.saveChannel(new DefaultSubscription(ch.registrationId(),
-                                ch.id(),
-                                endpointToken,
-                                content))
-        );
+        subscription(endpointToken).ifPresent(
+                ch -> store.saveChannel(new DefaultSubscription(ch.registrationId(), ch.id(), endpointToken, content)));
     }
 
     @Override

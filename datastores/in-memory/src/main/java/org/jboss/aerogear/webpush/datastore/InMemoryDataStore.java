@@ -18,10 +18,13 @@ package org.jboss.aerogear.webpush.datastore;
 
 
 import org.jboss.aerogear.webpush.NewSubscription;
+import org.jboss.aerogear.webpush.PushMessage;
 import org.jboss.aerogear.webpush.Registration;
 import org.jboss.aerogear.webpush.Subscription;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -37,6 +40,8 @@ public class InMemoryDataStore implements DataStore {
     private final ConcurrentMap<String, Registration> registrations = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Set<Subscription>> subscriptions = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, NewSubscription> newSubscriptions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, List<PushMessage>> waitingDeliveryMessages = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, ConcurrentMap<String, PushMessage>> sentMessages = new ConcurrentHashMap<>();
 
     private byte[] salt;
 
@@ -49,6 +54,54 @@ public class InMemoryDataStore implements DataStore {
     @Override
     public Optional<NewSubscription> getNewSubscription(String id) {
         return Optional.ofNullable(newSubscriptions.get(id));
+    }
+
+    @Override
+    public void saveMessage(PushMessage msg) {
+        Objects.requireNonNull(msg, "push message can not be null");
+        String subId = msg.subscription();
+        List<PushMessage> currentList = waitingDeliveryMessages.get(subId);
+        if (currentList != null) {
+            currentList.add(msg);
+        } else {
+            List<PushMessage> newList = Collections.synchronizedList(new ArrayList<>());
+            newList.add(msg);
+            List<PushMessage> previousList = waitingDeliveryMessages.putIfAbsent(subId, newList);
+            if (previousList != null) {
+                previousList.add(msg);
+            }
+        }
+    }
+
+    @Override
+    public List<PushMessage> waitingDeliveryMessages(String subId) {
+        List<PushMessage> currentList = waitingDeliveryMessages.remove(subId);
+        if (currentList == null) {
+            return Collections.emptyList();
+        }
+        return Collections.unmodifiableList(currentList);
+    }
+
+    @Override
+    public void saveSentMessage(PushMessage msg) {
+        Objects.requireNonNull(msg, "push message can not be null");
+        String subId = msg.subscription();
+        ConcurrentMap<String, PushMessage> currentMap = sentMessages.get(subId);
+        if (currentMap == null) {
+            ConcurrentMap<String, PushMessage> newMap = new ConcurrentHashMap<>();
+            ConcurrentMap<String, PushMessage> previousMap = sentMessages.putIfAbsent(subId, newMap);
+            currentMap = previousMap != null ? previousMap : newMap;
+        }
+        currentMap.put(msg.id(), msg);
+    }
+
+    @Override
+    public Optional<PushMessage> sentMessage(String subId, String msgId) {
+        ConcurrentMap<String, PushMessage> currentMap = sentMessages.get(subId);
+        if (currentMap != null) {
+            return Optional.ofNullable(currentMap.get(msgId));
+        }
+        return Optional.empty();
     }
 
     @Override

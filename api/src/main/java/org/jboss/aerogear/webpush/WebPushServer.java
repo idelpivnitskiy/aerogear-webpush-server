@@ -16,6 +16,7 @@
  */
 package org.jboss.aerogear.webpush;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -33,6 +34,14 @@ public interface WebPushServer {
     Optional<NewSubscription> subscriptionByPushToken(String pushToken);
 
     Optional<NewSubscription> subscriptionByReceiptToken(String receiptToken);
+
+    void saveMessage(PushMessage msg);
+
+    List<PushMessage> waitingDeliveryMessages(String subId);
+
+    void saveSentMessage(PushMessage msg);
+
+    Optional<PushMessage> sentMessage(String pushMsgResource);
 
     /**
      * Registers a device with this server as per
