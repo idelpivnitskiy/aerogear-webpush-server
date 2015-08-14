@@ -387,15 +387,6 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN);
     }
 
-    private Http2Headers createdHeaders(final Subscription subscription) {
-        return new DefaultHttp2Headers(false)
-                .status(CREATED.codeAsText())
-                .set(LOCATION, new AsciiString(WEBPUSH_URI + subscription.endpoint()))
-                .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN)
-                .set(ACCESS_CONTROL_EXPOSE_HEADERS, new AsciiString("Location"))
-                .set(CACHE_CONTROL, privateCacheWithMaxAge(webpushServer.config().subscriptionMaxAge()));
-    }
-
     /**
      * Returns a cache-control value with this private and has the specified maxAge.
      *
@@ -425,19 +416,22 @@ public class WebPushFrameListener extends Http2FrameAdapter {
             }
             List<PushMessage> newMessages = null;
             while (!(newMessages = webpushServer.waitingDeliveryMessages(sub.id())).isEmpty()) {
-                newMessages.forEach(pushMessage -> {
+                newMessages.forEach(pushMessage -> {    //FIXME save pm to sentMessages
+                    Http2Headers promiseHeaders = promiseHeaders(pushMessage);
                     Http2Headers monitorHeaders = monitorHeaders(pushMessage);
-                    encoder.writePushPromise(ctx, streamId, pushStreamId, monitorHeaders, 0, ctx.newPromise())
+                    encoder.writePushPromise(ctx, streamId, pushStreamId, promiseHeaders, 0, ctx.newPromise())
                            .addListener(WebPushFrameListener::logFutureError);
-                    LOGGER.info("Monitor ctx={}, subscriptionId={}, pushPromiseStreamId={}, headers={}", ctx, sub.id(),
-                            pushStreamId, monitorHeaders);
-                    encoder.writeData(ctx, pushStreamId, copiedBuffer(pushMessage.payload(), UTF_8),
-                            padding, false, client.ctx.newPromise())
+                    encoder.writeHeaders(ctx, pushStreamId, monitorHeaders, 0, false, ctx.newPromise())
                            .addListener(WebPushFrameListener::logFutureError);
+                    encoder.writeData(ctx, pushStreamId, copiedBuffer(pushMessage.payload(), UTF_8), padding, true,
+                            ctx.newPromise()).addListener(WebPushFrameListener::logFutureError);
+                    LOGGER.info("Monitor ctx={}, subscriptionId={}, streamId={}, pushPromiseStreamId={}, "
+                                    + "promiseHeaders={}, monitorHeaders={}, pushMessage={}",
+                            ctx, sub.id(), streamId, pushStreamId, promiseHeaders, monitorHeaders, pushMessage);
                 });
             }
-            final Optional<ByteString> wait = Optional.ofNullable(headers.get(PREFER_HEADER))
-                                                      .filter(val -> "wait=0".equals(val.toString()));  //FIXME improve
+            final Optional<ByteString> wait =
+                    Optional.ofNullable(headers.get(PREFER_HEADER)).filter(val -> "wait=0".equals(val.toString()));  //FIXME improve
             wait.ifPresent(s -> encoder.writeHeaders(ctx, streamId, noContentHeaders(), 0, true, ctx.newPromise()));
         });
     }
@@ -454,10 +448,16 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN);
     }
 
+    private Http2Headers promiseHeaders(PushMessage pushMessage) {
+        return new DefaultHttp2Headers(false)
+                .method(new AsciiString(GET))   //FIXME move to constant
+                .path(webpushUri(Resource.PUSH_MESSAGE,
+                        webpushServer.generateEndpointToken(pushMessage.id(), pushMessage.subscription())))  //FIXME move to constant
+                .authority(new AsciiString(webpushServer.config().host() + ":" + webpushServer.config().port()));
+    }
+
     private Http2Headers monitorHeaders(PushMessage pushMessage) {
         return new DefaultHttp2Headers(false)
-                .path(webpushUri(Resource.PUSH_MESSAGE,
-                        webpushServer.generateEndpointToken(pushMessage.id(), pushMessage.subscription())))
                 .status(OK.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN)
                 .set(ACCESS_CONTROL_EXPOSE_HEADERS, EXPOSE_HEADERS_SHORT)   //FIXME incorrect EXPOSE_HEADERS
