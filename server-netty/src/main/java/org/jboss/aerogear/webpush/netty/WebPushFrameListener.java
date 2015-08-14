@@ -55,6 +55,7 @@ import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpHeaderNames.LOCATION;
 import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static io.netty.handler.codec.http.HttpResponseStatus.CREATED;
+import static io.netty.handler.codec.http.HttpResponseStatus.GONE;
 import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.NO_CONTENT;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
@@ -323,7 +324,26 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     }
 
     private void handleAcknowledgement(ChannelHandlerContext ctx, int streamId, String path) {
-        //TODO the push server MUST deliver a response to the application server monitoring the receipt subscription resource
+        Optional<PushMessage> pushMessageOpt = extractToken(path).flatMap(webpushServer::sentMessage);
+        pushMessageOpt.ifPresent(pushMessage -> {
+            Client client = acksStreams.get(pushMessage.receiptSubscription().get());
+            if (client != null) {
+                receivePushMessageReceipts(pushMessage, client);
+            }
+        });
+        //FIXME should I send a response to a UA?
+    }
+
+    private void receivePushMessageReceipts(final PushMessage pushMessage, final Client client) {
+        Http2Headers promiseHeaders = promiseHeaders(pushMessage);
+        Http2Headers ackHeaders = ackHeaders();
+        final int pushStreamId = client.encoder.connection().local().nextStreamId();
+        client.encoder.writePushPromise(client.ctx, client.streamId, pushStreamId, promiseHeaders, 0,
+                client.ctx.newPromise()).addListener(WebPushFrameListener::logFutureError);
+        client.encoder.writeHeaders(client.ctx, pushStreamId, ackHeaders, 0, true, client.ctx.newPromise())
+                      .addListener(WebPushFrameListener::logFutureError);
+        LOGGER.info("Sent ack to client={}, pushPromiseStreamId={}, promiseHeaders={}, ackHeaders={}, pushMessage={}",
+                client, pushStreamId, promiseHeaders, ackHeaders, pushMessage);
     }
 
     private void handlePushMessageSubscriptionRemoval(final ChannelHandlerContext ctx,
@@ -438,7 +458,8 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         Http2Headers promiseHeaders = promiseHeaders(pushMessage);
         Http2Headers monitorHeaders = monitorHeaders(pushMessage);
         final int pushStreamId = client.encoder.connection().local().nextStreamId();
-        client.encoder.writePushPromise(client.ctx, client.streamId, pushStreamId, promiseHeaders, 0, client.ctx.newPromise())
+        client.encoder.writePushPromise(client.ctx, client.streamId, pushStreamId, promiseHeaders, 0,
+                client.ctx.newPromise())
                .addListener(WebPushFrameListener::logFutureError);
         client.encoder.writeHeaders(client.ctx, pushStreamId, monitorHeaders, 0, false, client.ctx.newPromise())
                .addListener(WebPushFrameListener::logFutureError);
@@ -446,7 +467,8 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 client.ctx.newPromise()).addListener(WebPushFrameListener::logFutureError);
         LOGGER.info("Sent to client={}, pushPromiseStreamId={}, promiseHeaders={}, monitorHeaders={}, pushMessage={}",
                 client, pushStreamId, promiseHeaders, monitorHeaders, pushMessage);
-        webpushServer.saveSentMessage(pushMessage);
+
+        pushMessage.receiptSubscription().ifPresent(rs -> webpushServer.saveSentMessage(pushMessage));
     }
 
     private static Http2Headers noContentHeaders() {
@@ -478,6 +500,12 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         return new DefaultHttp2Headers(false)
                 .status(BAD_REQUEST.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN);
+    }
+
+    private static Http2Headers ackHeaders() {
+        return new DefaultHttp2Headers(false)
+                .status(GONE.codeAsText())
+                .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN);  //FIXME add date
     }
 
     private void badRequest(final ChannelHandlerContext ctx, final int streamId, final String errorMsg) {

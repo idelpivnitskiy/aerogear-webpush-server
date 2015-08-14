@@ -85,6 +85,10 @@ public class InMemoryDataStore implements DataStore {
     @Override
     public void saveSentMessage(PushMessage msg) {
         Objects.requireNonNull(msg, "push message can not be null");
+        if (!msg.receiptSubscription().isPresent()) {
+            throw new IllegalArgumentException("push message must have receipt subscription URI");
+        }
+
         String subId = msg.subscription();
         ConcurrentMap<String, PushMessage> currentMap = sentMessages.get(subId);
         if (currentMap == null) {
@@ -99,7 +103,7 @@ public class InMemoryDataStore implements DataStore {
     public Optional<PushMessage> sentMessage(String subId, String msgId) {
         ConcurrentMap<String, PushMessage> currentMap = sentMessages.get(subId);
         if (currentMap != null) {
-            return Optional.ofNullable(currentMap.get(msgId));
+            return Optional.ofNullable(currentMap.remove(msgId));
         }
         return Optional.empty();
     }
