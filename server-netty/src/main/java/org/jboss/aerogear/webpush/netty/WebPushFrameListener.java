@@ -53,6 +53,7 @@ import static io.netty.handler.codec.http.HttpHeaderNames.CACHE_CONTROL;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpHeaderNames.LOCATION;
+import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static io.netty.handler.codec.http.HttpResponseStatus.CREATED;
 import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.NO_CONTENT;
@@ -223,7 +224,8 @@ public class WebPushFrameListener extends Http2FrameAdapter {
             if (receiptToken.isPresent()) {
                 Optional<NewSubscription> receiptSub = webpushServer.subscriptionByReceiptToken(receiptToken.get());
                 if (!receiptSub.isPresent() || !subscription.equals(receiptSub)) {
-                    throw new RuntimeException("Subscriptions mismatched"); //FIXME 401
+                    badRequest(ctx, streamId, "Subscriptions don't match");
+                    return;
                 }
             }
             final int readableBytes = data.readableBytes();
@@ -308,7 +310,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
             String subscriptionToken = receiptsToken.get();
             Optional<NewSubscription> subscription = webpushServer.subscriptionByToken(subscriptionToken);
             subscription.ifPresent(sub -> {
-                String receiptResourceId = UUID.randomUUID().toString();   //FIXME need save?
+                String receiptResourceId = UUID.randomUUID().toString();
                 String receiptResourceToken = webpushServer.generateEndpointToken(receiptResourceId, sub.id());
                 encoder.writeHeaders(ctx, streamId, receiptsHeaders(receiptResourceToken), 0, true, ctx.newPromise());
                 LOGGER.info("Receipt Subscription Resource: {}", receiptResourceToken);
@@ -470,6 +472,17 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         return new DefaultHttp2Headers(false)
                 .status(NOT_FOUND.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN);
+    }
+
+    private static Http2Headers badRequestHeaders() {
+        return new DefaultHttp2Headers(false)
+                .status(BAD_REQUEST.codeAsText())
+                .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN);
+    }
+
+    private void badRequest(final ChannelHandlerContext ctx, final int streamId, final String errorMsg) {
+        encoder.writeHeaders(ctx, streamId, badRequestHeaders(), 0, false, ctx.newPromise());
+        encoder.writeData(ctx, streamId, copiedBuffer(errorMsg, UTF_8), 0, true, ctx.newPromise());
     }
 
     private Http2Headers promiseHeaders(PushMessage pushMessage) {
