@@ -231,19 +231,10 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 PushMessage pushMessage = buildPushMessage(sub.id(), data, stream);
                 Optional<Client> optionalClient = clientForSubId(sub.id());
                 if (optionalClient.isPresent()) {
-                    final Client client = optionalClient.get();
-                    if (!client.isHeadersSent()) {
-                        client.encoder.writeHeaders(client.ctx, client.streamId, EmptyHttp2Headers.INSTANCE, 0, false, client.ctx.newPromise())
-                                      .addListener(WebPushFrameListener::logFutureError);
-                        client.headersSent();
-                    }
-                    client.encoder.writeData(client.ctx, client.streamId, data.retain(), padding, false, client.ctx.newPromise())
-                                  .addListener(WebPushFrameListener::logFutureError);
-                    webpushServer.saveSentMessage(pushMessage);
-                    LOGGER.info("{} sent to UA", pushMessage);
+                    receivePushMessage(pushMessage, optionalClient.get());
                 } else {
                     webpushServer.saveMessage(pushMessage);
-                    LOGGER.info("{} saved in storage", pushMessage);
+                    LOGGER.info("UA not connected, saved to storage: ", pushMessage);
                 }
                 encoder.writeHeaders(ctx, streamId, pushMessageHeaders(pushMessage), 0, true, ctx.newPromise());
             }
@@ -408,32 +399,36 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                                final Http2Headers headers) {
         Optional<NewSubscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionById);
         subscription.ifPresent(sub -> {
-            final int pushStreamId = encoder.connection().local().nextStreamId();
-            final Client client = new Client(ctx, pushStreamId, encoder);
+            final Client client = new Client(ctx, streamId, encoder);
             Client previousClient = monitoredStreams.put(sub.id(), client);
             if (previousClient != null) {
                 previousClient.ctx.close();
             }
             List<PushMessage> newMessages = null;
             while (!(newMessages = webpushServer.waitingDeliveryMessages(sub.id())).isEmpty()) {
-                newMessages.forEach(pushMessage -> {    //FIXME save pm to sentMessages
-                    Http2Headers promiseHeaders = promiseHeaders(pushMessage);
-                    Http2Headers monitorHeaders = monitorHeaders(pushMessage);
-                    encoder.writePushPromise(ctx, streamId, pushStreamId, promiseHeaders, 0, ctx.newPromise())
-                           .addListener(WebPushFrameListener::logFutureError);
-                    encoder.writeHeaders(ctx, pushStreamId, monitorHeaders, 0, false, ctx.newPromise())
-                           .addListener(WebPushFrameListener::logFutureError);
-                    encoder.writeData(ctx, pushStreamId, copiedBuffer(pushMessage.payload(), UTF_8), padding, true,
-                            ctx.newPromise()).addListener(WebPushFrameListener::logFutureError);
-                    LOGGER.info("Monitor ctx={}, subscriptionId={}, streamId={}, pushPromiseStreamId={}, "
-                                    + "promiseHeaders={}, monitorHeaders={}, pushMessage={}",
-                            ctx, sub.id(), streamId, pushStreamId, promiseHeaders, monitorHeaders, pushMessage);
-                });
+                for (PushMessage pushMessage : newMessages) {
+                    receivePushMessage(pushMessage, client);
+                }
             }
             final Optional<ByteString> wait =
                     Optional.ofNullable(headers.get(PREFER_HEADER)).filter(val -> "wait=0".equals(val.toString()));  //FIXME improve
             wait.ifPresent(s -> encoder.writeHeaders(ctx, streamId, noContentHeaders(), 0, true, ctx.newPromise()));
         });
+    }
+
+    private void receivePushMessage(final PushMessage pushMessage, final Client client) {
+        Http2Headers promiseHeaders = promiseHeaders(pushMessage);
+        Http2Headers monitorHeaders = monitorHeaders(pushMessage);
+        final int pushStreamId = encoder.connection().local().nextStreamId();
+        encoder.writePushPromise(client.ctx, client.streamId, pushStreamId, promiseHeaders, 0, client.ctx.newPromise())
+               .addListener(WebPushFrameListener::logFutureError);
+        encoder.writeHeaders(client.ctx, pushStreamId, monitorHeaders, 0, false, client.ctx.newPromise())
+               .addListener(WebPushFrameListener::logFutureError);
+        encoder.writeData(client.ctx, pushStreamId, copiedBuffer(pushMessage.payload(), UTF_8), 0, true,
+                client.ctx.newPromise()).addListener(WebPushFrameListener::logFutureError);
+        LOGGER.info("Sent client={}, pushPromiseStreamId={}, promiseHeaders={}, monitorHeaders={}, pushMessage={}",
+                client, pushStreamId, promiseHeaders, monitorHeaders, pushMessage);
+        webpushServer.saveSentMessage(pushMessage);
     }
 
     private static Http2Headers noContentHeaders() {
@@ -483,7 +478,6 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         private final ChannelHandlerContext ctx;
         private final Http2ConnectionEncoder encoder;
         private final int streamId;
-        private volatile boolean headersSent;
 
         Client(final ChannelHandlerContext ctx, final int streamId, final Http2ConnectionEncoder encoder) {
             this.ctx = ctx;
@@ -491,17 +485,9 @@ public class WebPushFrameListener extends Http2FrameAdapter {
             this.encoder = encoder;
         }
 
-        boolean isHeadersSent() {
-            return headersSent;
-        }
-
-        void headersSent() {
-            headersSent = true;
-        }
-
         @Override
         public String toString() {
-            return "Client[streamid=" + streamId + ", ctx=" + ctx + ", headersSent=" + headersSent + "]";
+            return "Client[streamid=" + streamId + ", ctx=" + ctx + "]";
         }
     }
 }
