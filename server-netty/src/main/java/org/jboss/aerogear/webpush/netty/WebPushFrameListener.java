@@ -229,6 +229,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 encoder.writeHeaders(ctx, streamId, messageToLarge(), 0, true, ctx.newPromise());
             } else {
                 PushMessage pushMessage = buildPushMessage(sub.id(), data, stream);
+                encoder.writeHeaders(ctx, streamId, pushMessageHeaders(pushMessage), 0, true, ctx.newPromise());
                 Optional<Client> optionalClient = clientForSubId(sub.id());
                 if (optionalClient.isPresent()) {
                     receivePushMessage(pushMessage, optionalClient.get());
@@ -236,7 +237,6 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                     webpushServer.saveMessage(pushMessage);
                     LOGGER.info("UA not connected, saved to storage: ", pushMessage);
                 }
-                encoder.writeHeaders(ctx, streamId, pushMessageHeaders(pushMessage), 0, true, ctx.newPromise());
             }
         });
     }
@@ -400,10 +400,8 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         Optional<NewSubscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionById);
         subscription.ifPresent(sub -> {
             final Client client = new Client(ctx, streamId, encoder);
-            Client previousClient = monitoredStreams.put(sub.id(), client);
-            if (previousClient != null) {
-                previousClient.ctx.close();
-            }
+            monitoredStreams.put(sub.id(), client);
+            LOGGER.info("Registered client={}", client);
             List<PushMessage> newMessages = null;
             while (!(newMessages = webpushServer.waitingDeliveryMessages(sub.id())).isEmpty()) {
                 for (PushMessage pushMessage : newMessages) {
@@ -412,7 +410,10 @@ public class WebPushFrameListener extends Http2FrameAdapter {
             }
             final Optional<ByteString> wait =
                     Optional.ofNullable(headers.get(PREFER_HEADER)).filter(val -> "wait=0".equals(val.toString()));  //FIXME improve
-            wait.ifPresent(s -> encoder.writeHeaders(ctx, streamId, noContentHeaders(), 0, true, ctx.newPromise()));
+            wait.ifPresent(s -> {
+                encoder.writeHeaders(ctx, streamId, noContentHeaders(), 0, true, ctx.newPromise());
+                LOGGER.info("204 No Content has sent to client={}", client);
+            });
         });
     }
 
@@ -426,7 +427,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                .addListener(WebPushFrameListener::logFutureError);
         encoder.writeData(client.ctx, pushStreamId, copiedBuffer(pushMessage.payload(), UTF_8), 0, true,
                 client.ctx.newPromise()).addListener(WebPushFrameListener::logFutureError);
-        LOGGER.info("Sent client={}, pushPromiseStreamId={}, promiseHeaders={}, monitorHeaders={}, pushMessage={}",
+        LOGGER.info("Sent to client={}, pushPromiseStreamId={}, promiseHeaders={}, monitorHeaders={}, pushMessage={}",
                 client, pushStreamId, promiseHeaders, monitorHeaders, pushMessage);
         webpushServer.saveSentMessage(pushMessage);
     }
