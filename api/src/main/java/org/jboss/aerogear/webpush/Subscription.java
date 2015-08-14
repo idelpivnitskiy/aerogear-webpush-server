@@ -19,7 +19,7 @@ package org.jboss.aerogear.webpush;
 /**
  * Represents a client subscription in the WebPush protocol.
  */
-public interface NewSubscription {
+public interface Subscription {
 
     /**
      * A globally unique identifier for this subscription.

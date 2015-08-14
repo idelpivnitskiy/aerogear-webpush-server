@@ -27,17 +27,17 @@ public interface WebPushServer {
     /**
      * TODO add comments
      */
-    NewSubscription newSubscription();
+    Subscription subscription();
 
-    Optional<NewSubscription> subscriptionById(String subscriptionId);
+    Optional<Subscription> subscriptionById(String id);
 
-    Optional<NewSubscription> subscriptionByToken(String subscriptionToken);
+    Optional<Subscription> subscriptionByToken(String token);
 
-    Optional<NewSubscription> subscriptionByPushToken(String pushToken);
+    Optional<Subscription> subscriptionByPushToken(String pushToken);
 
-    Optional<NewSubscription> subscriptionByReceiptToken(String receiptToken);
+    Optional<Subscription> subscriptionByReceiptToken(String receiptToken);
 
-    List<PushMessage> removeNewSubscription(String id);
+    List<PushMessage> removeSubscription(String id);
 
     void saveMessage(PushMessage msg);
 

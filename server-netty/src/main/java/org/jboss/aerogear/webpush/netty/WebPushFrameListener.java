@@ -30,7 +30,7 @@ import io.netty.util.AttributeKey;
 import io.netty.util.ByteString;
 import io.netty.util.concurrent.Future;
 import org.jboss.aerogear.webpush.DefaultPushMessage;
-import org.jboss.aerogear.webpush.NewSubscription;
+import org.jboss.aerogear.webpush.Subscription;
 import org.jboss.aerogear.webpush.PushMessage;
 import org.jboss.aerogear.webpush.Resource;
 import org.jboss.aerogear.webpush.WebLink;
@@ -217,12 +217,12 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     }
 
     private void handlePush(ChannelHandlerContext ctx, int streamId, String path, ByteBuf data) {
-        Optional<NewSubscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionByPushToken);
+        Optional<Subscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionByPushToken);
         subscription.ifPresent(sub -> {
             Http2Stream stream = encoder.connection().stream(streamId);
             Optional<String> receiptToken = stream.getProperty(pushReceiptPropertyKey);
             if (receiptToken.isPresent()) {
-                Optional<NewSubscription> receiptSub = webpushServer.subscriptionByReceiptToken(receiptToken.get());
+                Optional<Subscription> receiptSub = webpushServer.subscriptionByReceiptToken(receiptToken.get());
                 if (!receiptSub.isPresent() || !subscription.equals(receiptSub)) {
                     badRequest(ctx, streamId, "Subscriptions don't match");
                     return;
@@ -290,12 +290,12 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     }
 
     private void handleSubscribe(final ChannelHandlerContext ctx, final int streamId) {
-        NewSubscription subscription = webpushServer.newSubscription();
+        Subscription subscription = webpushServer.subscription();
         encoder.writeHeaders(ctx, streamId, subscriptionHeaders(subscription), 0, true, ctx.newPromise());
         LOGGER.info("Subscription for Push Messages: {}", subscription);
     }
 
-    private Http2Headers subscriptionHeaders(NewSubscription subscription) {
+    private Http2Headers subscriptionHeaders(Subscription subscription) {
         String pushToken = webpushServer.generateEndpointToken(subscription.pushResourceId(), subscription.id());
         String receiptsToken = webpushServer.generateEndpointToken(subscription.id());
         return resourceHeaders(Resource.SUBSCRIPTION, subscription.id(), EXPOSE_HEADERS)
@@ -308,7 +308,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         Optional<String> receiptsToken = extractToken(path);
         receiptsToken.ifPresent(e -> {
             String subscriptionToken = receiptsToken.get();
-            Optional<NewSubscription> subscription = webpushServer.subscriptionByToken(subscriptionToken);
+            Optional<Subscription> subscription = webpushServer.subscriptionByToken(subscriptionToken);
             subscription.ifPresent(sub -> {
                 String receiptResourceId = UUID.randomUUID().toString();
                 String receiptResourceToken = webpushServer.generateEndpointToken(receiptResourceId, sub.id());
@@ -349,7 +349,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                                                       final int streamId,
                                                       final String path) {
         final String subId = extractEndpointToken(path);
-        List<PushMessage> sentMessages = webpushServer.removeNewSubscription(subId);
+        List<PushMessage> sentMessages = webpushServer.removeSubscription(subId);
         removeClient(Optional.ofNullable(subId), monitoredStreams); //FIXME sent last response
         sentMessages.forEach(sm -> {
             removeClient(sm.receiptSubscription(), acksStreams);    //FIXME sent last response
@@ -429,7 +429,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                                final int streamId,
                                final Http2Headers headers,
                                final String path) {
-        Optional<NewSubscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionById);
+        Optional<Subscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionById);
         subscription.ifPresent(sub -> {
             final Client client = new Client(ctx, streamId, encoder);
             monitoredStreams.put(sub.id(), client);
@@ -478,7 +478,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                                                     final int streamId,
                                                     final String path) {
         Optional<String> receiptTokenOpt = extractToken(path);
-        Optional<NewSubscription> subscription = receiptTokenOpt.flatMap(webpushServer::subscriptionByReceiptToken);
+        Optional<Subscription> subscription = receiptTokenOpt.flatMap(webpushServer::subscriptionByReceiptToken);
         subscription.ifPresent(sub -> {
             final Client client = new Client(ctx, streamId, encoder);
             acksStreams.put(receiptTokenOpt.get(), client);

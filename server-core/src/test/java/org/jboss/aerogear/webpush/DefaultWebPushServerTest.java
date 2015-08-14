@@ -56,7 +56,7 @@ public class DefaultWebPushServerTest {
     @Test
     public void newChannel() throws Exception {
         final Registration reg = server.register();
-        final Optional<Subscription> ch = server.newSubscription(reg.id());
+        final Optional<Subscription> ch = server.subscription(reg.id());
         assertThat(ch.isPresent(), equalTo(true));
         assertThat(ch.get().registrationId(), equalTo(reg.id()));
         assertThat(ch.get().message(), equalTo(Optional.empty()));
@@ -65,7 +65,7 @@ public class DefaultWebPushServerTest {
     @Test
     public void removeChannel() throws Exception {
         final Registration reg = server.register();
-        final Optional<Subscription> ch = server.newSubscription(reg.id());
+        final Optional<Subscription> ch = server.subscription(reg.id());
         assertThat(ch.isPresent(), equalTo(true));
         assertThat(ch.get().registrationId(), equalTo(reg.id()));
         server.removeSubscription(ch.get());
@@ -74,7 +74,7 @@ public class DefaultWebPushServerTest {
     @Test
     public void setAndGetMessage() throws Exception {
         final Registration reg = server.register();
-        final Optional<Subscription> ch = server.newSubscription(reg.id());
+        final Optional<Subscription> ch = server.subscription(reg.id());
         assertThat(ch.isPresent(), equalTo(true));
         server.setMessage(ch.get().endpoint(), Optional.of("some message"));
         final Optional<String> message = server.getMessage(ch.get().endpoint());

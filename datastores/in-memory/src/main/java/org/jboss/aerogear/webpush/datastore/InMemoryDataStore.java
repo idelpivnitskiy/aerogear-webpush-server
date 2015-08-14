@@ -17,7 +17,7 @@
 package org.jboss.aerogear.webpush.datastore;
 
 
-import org.jboss.aerogear.webpush.NewSubscription;
+import org.jboss.aerogear.webpush.Subscription;
 import org.jboss.aerogear.webpush.PushMessage;
 
 import java.util.ArrayList;
@@ -34,31 +34,31 @@ import java.util.concurrent.ConcurrentMap;
 public class InMemoryDataStore implements DataStore {
 
     public static final byte[] EMPTY_BYTES = {};
-    private final ConcurrentMap<String, NewSubscription> newSubscriptions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Subscription> subscriptions = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, List<PushMessage>> waitingDeliveryMessages = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, ConcurrentMap<String, PushMessage>> sentMessages = new ConcurrentHashMap<>();
 
     private byte[] salt;
 
     @Override
-    public void saveNewSubscription(NewSubscription subscription) {
+    public void saveSubscription(Subscription subscription) {
         Objects.requireNonNull(subscription, "subscription must not be null");
-        newSubscriptions.putIfAbsent(subscription.id(), subscription);
+        subscriptions.putIfAbsent(subscription.id(), subscription);
     }
 
     @Override
-    public Optional<NewSubscription> getNewSubscription(String id) {
-        return Optional.ofNullable(newSubscriptions.get(id));
+    public Optional<Subscription> subscription(String id) {
+        return Optional.ofNullable(subscriptions.get(id));
     }
 
     @Override
-    public List<PushMessage> removeNewSubscription(String id) {
+    public List<PushMessage> removeSubscription(String id) {
         List<PushMessage> result = null;
-        NewSubscription subscription;
+        Subscription subscription;
         List<PushMessage> waitingDelivery;
         ConcurrentMap<String, PushMessage> sent;
         do {
-            subscription = newSubscriptions.remove(id);
+            subscription = subscriptions.remove(id);
             waitingDelivery = waitingDeliveryMessages.remove(id);
             sent = sentMessages.remove(id);
             if (sent != null) {

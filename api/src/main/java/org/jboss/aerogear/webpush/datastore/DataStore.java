@@ -16,7 +16,7 @@
  */
 package org.jboss.aerogear.webpush.datastore;
 
-import org.jboss.aerogear.webpush.NewSubscription;
+import org.jboss.aerogear.webpush.Subscription;
 import org.jboss.aerogear.webpush.PushMessage;
 
 import java.util.List;
@@ -27,11 +27,11 @@ import java.util.Optional;
  */
 public interface DataStore {
 
-    void saveNewSubscription(NewSubscription subscription);
+    void saveSubscription(Subscription subscription);
 
-    Optional<NewSubscription> getNewSubscription(String id);
+    Optional<Subscription> subscription(String id);
 
-    List<PushMessage> removeNewSubscription(String id);
+    List<PushMessage> removeSubscription(String id);
 
     void saveMessage(PushMessage msg);
 

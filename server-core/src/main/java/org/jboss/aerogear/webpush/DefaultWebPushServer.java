@@ -49,21 +49,21 @@ public class DefaultWebPushServer implements WebPushServer {
      * TODO add comments
      */
     @Override
-    public NewSubscription newSubscription() {
+    public Subscription subscription() {
         String id = UUID.randomUUID().toString();
         String pushResourceId = UUID.randomUUID().toString();
-        NewSubscription subscription = new DefaultNewSubscription(id, pushResourceId);
-        store.saveNewSubscription(subscription);
+        Subscription subscription = new DefaultSubscription(id, pushResourceId);
+        store.saveSubscription(subscription);
         return subscription;
     }
 
     @Override
-    public Optional<NewSubscription> subscriptionById(String subscriptionId) {
-        return store.getNewSubscription(subscriptionId);
+    public Optional<Subscription> subscriptionById(String subscriptionId) {
+        return store.subscription(subscriptionId);
     }
 
     @Override
-    public Optional<NewSubscription> subscriptionByToken(String subscriptionToken) {
+    public Optional<Subscription> subscriptionByToken(String subscriptionToken) {
         try {
             String subscriptionId = CryptoUtil.decrypt(privateKey, subscriptionToken);
             return subscriptionById(subscriptionId);
@@ -74,13 +74,13 @@ public class DefaultWebPushServer implements WebPushServer {
     }
 
     @Override
-    public Optional<NewSubscription> subscriptionByPushToken(String pushToken) {
+    public Optional<Subscription> subscriptionByPushToken(String pushToken) {
         try {
             String decrypt = CryptoUtil.decrypt(privateKey, pushToken);
             String[] tokens = decrypt.split(CryptoUtil.DELIMITER);
-            Optional<NewSubscription> subscription = store.getNewSubscription(tokens[1]);
+            Optional<Subscription> subscription = store.subscription(tokens[1]);
             if (subscription.isPresent()) {
-                NewSubscription sub = subscription.get();
+                Subscription sub = subscription.get();
                 if (sub.pushResourceId().equals(tokens[0])) {
                     return subscription;
                 }
@@ -92,11 +92,11 @@ public class DefaultWebPushServer implements WebPushServer {
     }
 
     @Override
-    public Optional<NewSubscription> subscriptionByReceiptToken(String receiptToken) {
+    public Optional<Subscription> subscriptionByReceiptToken(String receiptToken) {
         try {
             String decrypt = CryptoUtil.decrypt(privateKey, receiptToken);
             String[] tokens = decrypt.split(CryptoUtil.DELIMITER);
-            return store.getNewSubscription(tokens[1]);
+            return store.subscription(tokens[1]);
         } catch (final Exception e) {
             LOGGER.debug(e.getMessage(), e);
         }
@@ -104,8 +104,8 @@ public class DefaultWebPushServer implements WebPushServer {
     }
 
     @Override
-    public List<PushMessage> removeNewSubscription(String id) {
-        return store.removeNewSubscription(id);
+    public List<PushMessage> removeSubscription(String id) {
+        return store.removeSubscription(id);
     }
 
     @Override

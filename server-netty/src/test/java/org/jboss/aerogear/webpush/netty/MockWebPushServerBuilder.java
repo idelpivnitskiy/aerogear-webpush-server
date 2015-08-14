@@ -47,12 +47,12 @@ public class MockWebPushServerBuilder {
 
     public MockWebPushServerBuilder addSubscription(final Subscription subscription) {
         when(webPushServer.subscription(subscription.endpoint())).thenReturn(Optional.of(subscription));
-        when(webPushServer.newSubscription(registrationId)).thenReturn(Optional.of(subscription));
+        when(webPushServer.subscription(registrationId)).thenReturn(Optional.of(subscription));
         return this;
     }
 
     public MockWebPushServerBuilder subscriptionOrder(final Consumer<OngoingStubbing<Optional<Subscription>>> consumer) {
-        consumer.accept(when(webPushServer.newSubscription(registrationId)));
+        consumer.accept(when(webPushServer.subscription(registrationId)));
         return this;
     }
 

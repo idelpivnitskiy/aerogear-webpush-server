@@ -16,12 +16,12 @@
  */
 package org.jboss.aerogear.webpush;
 
-public class DefaultNewSubscription implements NewSubscription {
+public class DefaultSubscription implements Subscription {
 
     private final String id;
     private final String pushResourceId;
 
-    public DefaultNewSubscription(String id, String pushResourceId) {
+    public DefaultSubscription(String id, String pushResourceId) {
         this.id = id;
         this.pushResourceId = pushResourceId;
     }
@@ -45,7 +45,7 @@ public class DefaultNewSubscription implements NewSubscription {
             return false;
         }
 
-        DefaultNewSubscription that = (DefaultNewSubscription) o;
+        DefaultSubscription that = (DefaultSubscription) o;
 
         if (!id.equals(that.id)) {
             return false;
@@ -63,7 +63,7 @@ public class DefaultNewSubscription implements NewSubscription {
 
     @Override
     public String toString() {
-        return "DefaultNewSubscription{" +
+        return "DefaultSubscription{" +
                 "id='" + id + '\'' +
                 ", pushResourceId='" + pushResourceId + '\'' +
                 '}';
