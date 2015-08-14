@@ -40,6 +40,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -72,7 +73,9 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private static final AsciiString PUSH_RECEIPT_HEADER = new AsciiString("push-receipt");
     private static final AsciiString TTL_HEADER = new AsciiString("ttl");
     private static final AsciiString PREFER_HEADER = new AsciiString("prefer");
-    private static final AttributeKey<String> SUB_ID = AttributeKey.valueOf("subId");
+
+    private static final AttributeKey<String> SUBSCRIPTION_ID = AttributeKey.valueOf("SUBSCRIPTION_ID");
+    private static final AttributeKey<String> RECEIPT_SUBSCRIPTION_ID = AttributeKey.valueOf("RECEIPT_SUBSCRIPTION_ID");
 
     private static final ConcurrentHashMap<String, Client> monitoredStreams = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Client> acksStreams = new ConcurrentHashMap<>();
@@ -229,9 +232,9 @@ public class WebPushFrameListener extends Http2FrameAdapter {
             } else {
                 PushMessage pushMessage = buildPushMessage(sub.id(), data, stream);
                 encoder.writeHeaders(ctx, streamId, pushMessageHeaders(pushMessage), 0, true, ctx.newPromise());
-                Optional<Client> optionalClient = clientForSubId(sub.id());
-                if (optionalClient.isPresent()) {
-                    receivePushMessage(pushMessage, optionalClient.get());
+                Client client = monitoredStreams.get(sub.id());
+                if (client != null) {
+                    receivePushMessage(pushMessage, client);
                 } else {
                     webpushServer.saveMessage(pushMessage);
                     LOGGER.info("UA not connected, saved to storage: {}", pushMessage);
@@ -262,18 +265,20 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     }
 
     public void disconnect(final ChannelHandlerContext ctx) {
-        final Optional<String> subId = Optional.ofNullable(ctx.attr(SUB_ID).get());
-        subId.ifPresent(sId -> {
-            final Client client = monitoredStreams.remove(sId);
-            if (client != null) {
-                LOGGER.info("Removed client w/ subId={}: {}", sId, client);
-            }
-        });
+        final Optional<String> subId = Optional.ofNullable(ctx.attr(SUBSCRIPTION_ID).get());
+        removeClient(subId, monitoredStreams);
+        final Optional<String> recSubId = Optional.ofNullable(ctx.attr(RECEIPT_SUBSCRIPTION_ID).get());
+        removeClient(recSubId, acksStreams);
         LOGGER.info("Disconnected channel {}", ctx.channel().id());
     }
 
-    private static Optional<Client> clientForSubId(final String subId) {
-        return Optional.ofNullable(monitoredStreams.get(subId));
+    private static void removeClient(Optional<String> idOpt, Map<String, Client> map) {
+        idOpt.ifPresent(id -> {
+            final Client client = map.remove(id);
+            if (client != null) {
+                LOGGER.info("Removed client={}", client);
+            }
+        });
     }
 
     private static void logFutureError(final Future future) {
@@ -400,7 +405,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         subscription.ifPresent(sub -> {
             final Client client = new Client(ctx, streamId, encoder);
             monitoredStreams.put(sub.id(), client);
-            ctx.attr(SUB_ID).set(sub.id());
+            ctx.attr(SUBSCRIPTION_ID).set(sub.id());
             LOGGER.info("Registered client={}", client);
 
             List<PushMessage> newMessages = null;
@@ -442,9 +447,13 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private void handleReceivingPushMessageReceipts(final ChannelHandlerContext ctx,
                                                     final int streamId,
                                                     final String path) {
-        Optional<NewSubscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionByReceiptToken);
+        Optional<String> receiptTokenOpt = extractToken(path);
+        Optional<NewSubscription> subscription = receiptTokenOpt.flatMap(webpushServer::subscriptionByReceiptToken);
         subscription.ifPresent(sub -> {
             final Client client = new Client(ctx, streamId, encoder);
+            acksStreams.put(receiptTokenOpt.get(), client);
+            ctx.attr(RECEIPT_SUBSCRIPTION_ID).set(receiptTokenOpt.get());
+            LOGGER.info("Registered application for acks={}", client);
         });
     }
 
