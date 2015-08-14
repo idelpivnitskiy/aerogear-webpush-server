@@ -40,14 +40,17 @@ import org.jboss.aerogear.webpush.WebPushServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static io.netty.buffer.Unpooled.copiedBuffer;
 import static io.netty.handler.codec.http.HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN;
 import static io.netty.handler.codec.http.HttpHeaderNames.ACCESS_CONTROL_EXPOSE_HEADERS;
 import static io.netty.handler.codec.http.HttpHeaderNames.CACHE_CONTROL;
+import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpHeaderNames.LOCATION;
 import static io.netty.handler.codec.http.HttpResponseStatus.CREATED;
@@ -416,21 +419,26 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         subscription.ifPresent(sub -> {
             final int pushStreamId = encoder.connection().local().nextStreamId();
             final Client client = new Client(ctx, pushStreamId, encoder);
-            monitoredStreams.put(sub.id(), client);
-            Http2Headers monitorHeaders = monitorHeaders();
-            encoder.writePushPromise(ctx, streamId, pushStreamId, monitorHeaders, 0, ctx.newPromise());
-            LOGGER.info("Monitor ctx={}, subscriptionId={}, pushPromiseStreamId={}, headers={}",
-                    ctx, sub.id(), pushStreamId, monitorHeaders);
+            Client previousClient = monitoredStreams.put(sub.id(), client);
+            if (previousClient != null) {
+                previousClient.ctx.close();
+            }
+            List<PushMessage> newMessages = null;
+            while (!(newMessages = webpushServer.waitingDeliveryMessages(sub.id())).isEmpty()) {
+                newMessages.forEach(pushMessage -> {
+                    Http2Headers monitorHeaders = monitorHeaders(pushMessage);
+                    encoder.writePushPromise(ctx, streamId, pushStreamId, monitorHeaders, 0, ctx.newPromise())
+                           .addListener(WebPushFrameListener::logFutureError);
+                    LOGGER.info("Monitor ctx={}, subscriptionId={}, pushPromiseStreamId={}, headers={}", ctx, sub.id(),
+                            pushStreamId, monitorHeaders);
+                    encoder.writeData(ctx, pushStreamId, copiedBuffer(pushMessage.payload(), UTF_8),
+                            padding, false, client.ctx.newPromise())
+                           .addListener(WebPushFrameListener::logFutureError);
+                });
+            }
             final Optional<ByteString> wait = Optional.ofNullable(headers.get(PREFER_HEADER))
                                                       .filter(val -> "wait=0".equals(val.toString()));  //FIXME improve
-//            wait.ifPresent(s ->
-//                notificationStreams.entrySet().stream().filter(kv -> kv.getValue().equals(sub.id())).forEach(e -> {
-//                    final String endpoint = e.getKey();
-//                    final Optional<Subscription> sub = webpushServer.subscription(endpoint).filter(ch -> ch.message().isPresent());
-//                    sub.ifPresent(ch -> handleNotify(endpoint, ch.message().get(), padding, q -> {
-//                    }));
-//                })
-//            );
+            wait.ifPresent(s -> encoder.writeHeaders(ctx, streamId, noContentHeaders(), 0, true, ctx.newPromise()));
         });
     }
 
@@ -446,14 +454,17 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN);
     }
 
-    private Http2Headers monitorHeaders() {
+    private Http2Headers monitorHeaders(PushMessage pushMessage) {
         return new DefaultHttp2Headers(false)
+                .path(webpushUri(Resource.PUSH_MESSAGE,
+                        webpushServer.generateEndpointToken(pushMessage.id(), pushMessage.subscription())))
                 .status(OK.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN)
-                .set(ACCESS_CONTROL_EXPOSE_HEADERS, EXPOSE_HEADERS_SHORT)
+                .set(ACCESS_CONTROL_EXPOSE_HEADERS, EXPOSE_HEADERS_SHORT)   //FIXME incorrect EXPOSE_HEADERS
                 .set(CACHE_CONTROL, privateCacheWithMaxAge(webpushServer.config().registrationMaxAge()))
-                .set(CONTENT_TYPE, CONTENT_TYPE_VALUE);
-        //TODO add "last-modified" and "content-length" headers
+                .set(CONTENT_TYPE, CONTENT_TYPE_VALUE)
+                .setInt(CONTENT_LENGTH, pushMessage.payload().length());
+        //TODO add "last-modified" headers
     }
 
     private static Http2Headers okHeaders() {
