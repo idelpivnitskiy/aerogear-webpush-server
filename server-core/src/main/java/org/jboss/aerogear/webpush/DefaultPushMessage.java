@@ -30,7 +30,7 @@ public class DefaultPushMessage implements PushMessage {
     private final LocalDateTime createdDateTime;
 
     public DefaultPushMessage(String id, String subscription, Optional<String> receiptSubscription,
-            String payload, int ttl) {   //FIXME change to Builder
+            String payload, int ttl) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(subscription, "subscription");
         Objects.requireNonNull(payload, "payload");

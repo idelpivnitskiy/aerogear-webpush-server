@@ -22,12 +22,8 @@ import org.jboss.aerogear.webpush.util.CryptoUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URI;
-import java.net.URLEncoder;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 public class DefaultWebPushServer implements WebPushServer {
@@ -137,87 +133,6 @@ public class DefaultWebPushServer implements WebPushServer {
             LOGGER.debug(e.getMessage(), e);
         }
         return Optional.empty();
-    }
-
-    @Override
-    public Registration register() {
-        final String id = UUID.randomUUID().toString();
-        final String stringId = urlEncodeId(id);
-        final DefaultRegistration reg = new DefaultRegistration(id,
-                regUri(stringId),
-                subscribeUri(stringId));
-        store.saveRegistration(reg);
-        return reg;
-    }
-
-    @Override
-    public Optional<Registration> registration(final String id) {
-        return store.getRegistration(id);
-    }
-
-    private static URI regUri(final String id) {
-        return webpushURI(id, Resource.REGISTRATION.resourceName());
-    }
-
-    private static URI subscribeUri(final String id) {
-        return webpushURI(id, Resource.SUBSCRIBE.resourceName());
-    }
-
-    private static URI webpushURI(final String registrationId, final String resource) {
-        return URI.create("webpush/" + resource + "/" + registrationId);
-    }
-
-    private static String urlEncodeId(final String id) {
-        try {
-            return URLEncoder.encode(id, "ASCII");
-        } catch (final UnsupportedEncodingException e) {
-            throw new RuntimeException(e.getMessage(), e);
-        }
-    }
-
-    @Override
-    public Optional<Subscription> newSubscription(final String registrationId) {
-        final Optional<Registration> registration = store.getRegistration(registrationId);
-        return registration.map(r -> {
-            final String id = UUID.randomUUID().toString();
-            final String endpoint = generateEndpointToken(r.id(), id);
-            final DefaultSubscription newChannel = new DefaultSubscription(r.id(), id, endpoint);
-            store.saveChannel(newChannel);
-            return newChannel;
-        });
-    }
-
-    @Override
-    public void removeSubscription(Subscription subscription) {
-        store.removeChannel(subscription);
-    }
-
-    @Override
-    public Optional<String> getMessage(final String endpointToken) {
-        return subscription(endpointToken).flatMap(Subscription::message);
-    }
-
-    @Override
-    public void setMessage(final String endpointToken, final Optional<String> content) {
-        subscription(endpointToken).ifPresent(
-                ch -> store.saveChannel(new DefaultSubscription(ch.registrationId(), ch.id(), endpointToken, content)));
-    }
-
-    @Override
-    public Optional<Subscription> subscription(final String endpointToken) {
-        try {
-            final String decrypt = CryptoUtil.decrypt(privateKey, endpointToken);
-            final String[] tokens = decrypt.split(CryptoUtil.DELIMITER);
-            final Set<Subscription> subscriptions = store.getSubscriptions(tokens[0]);
-            return subscriptions.stream().filter(c -> c.id().equals(tokens[1])).findAny();
-        } catch (final Exception e) {
-            LOGGER.debug(e.getMessage(), e);
-        }
-        return Optional.empty();
-    }
-
-    @Override
-    public void monitor(String registrationId, String channelUri) {
     }
 
     @Override

@@ -33,7 +33,6 @@ import org.jboss.aerogear.webpush.DefaultPushMessage;
 import org.jboss.aerogear.webpush.NewSubscription;
 import org.jboss.aerogear.webpush.PushMessage;
 import org.jboss.aerogear.webpush.Resource;
-import org.jboss.aerogear.webpush.Subscription;
 import org.jboss.aerogear.webpush.WebLink;
 import org.jboss.aerogear.webpush.WebPushServer;
 import org.slf4j.Logger;
@@ -528,13 +527,6 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 .set(CONTENT_TYPE, CONTENT_TYPE_VALUE)
                 .setInt(CONTENT_LENGTH, pushMessage.payload().length());
         //TODO add "last-modified" headers
-    }
-
-    private static Http2Headers okHeaders() {
-        return new DefaultHttp2Headers(false)
-                .status(OK.codeAsText())
-                .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN)
-                .set(ACCESS_CONTROL_EXPOSE_HEADERS, CONTENT_TYPE);
     }
 
     private static String extractEndpointToken(final String path) {

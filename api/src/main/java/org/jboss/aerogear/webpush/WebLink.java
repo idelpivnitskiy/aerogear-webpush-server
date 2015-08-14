@@ -18,10 +18,6 @@ package org.jboss.aerogear.webpush;
 
 public enum WebLink {
 
-    SUBSCRIBE("urn:ietf:params:push:sub"),
-    AGGREGATE("urn:ietf:params:push:aggregate"),
-    REGISTRATION("urn:ietf:params:push:reg"),
-    SUBSCRIPTION("urn:ietf:params:push"),
     PUSH("urn:ietf:params:push"),
     RECEIPTS("urn:ietf:params:push:receipt");
 
@@ -34,9 +30,5 @@ public enum WebLink {
     @Override
     public String toString() {
         return type;
-    }
-
-    public String weblink(final String url) {
-        return "<" + url + ">;rel=\"" + type + "\"";
     }
 }

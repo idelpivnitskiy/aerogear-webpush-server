@@ -1,8 +1,6 @@
 package org.jboss.aerogear.webpush;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.util.CharsetUtil;
 import org.jboss.aesh.cl.CommandDefinition;
 import org.jboss.aesh.cl.Option;
 import org.jboss.aesh.console.AeshConsole;
@@ -453,11 +451,6 @@ public class WebPushConsole {
         }
 
         @Override
-        public void outbound(final Http2Headers headers, final ByteBuf byteBuf) {
-            printOutbound(headers, byteBuf);
-        }
-
-        @Override
         public void inbound(Http2Headers headers, int streamId) {
             printInbound(headers.toString(), streamId, null);
         }
@@ -485,14 +478,6 @@ public class WebPushConsole {
             final Prompt current = console.getPrompt();
             console.setPrompt(outbound);
             console.getShell().out().println(msg);
-            console.setPrompt(current);
-        }
-
-        private void printOutbound(final Http2Headers headers, final ByteBuf byteBuf) {
-            final Prompt current = console.getPrompt();
-            console.setPrompt(outbound);
-            console.getShell().out().println(headers);
-            console.getShell().out().println(JsonMapper.pretty(byteBuf.toString(CharsetUtil.UTF_8)));
             console.setPrompt(current);
         }
 

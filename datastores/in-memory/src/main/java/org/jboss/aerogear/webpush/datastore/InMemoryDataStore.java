@@ -19,15 +19,12 @@ package org.jboss.aerogear.webpush.datastore;
 
 import org.jboss.aerogear.webpush.NewSubscription;
 import org.jboss.aerogear.webpush.PushMessage;
-import org.jboss.aerogear.webpush.Registration;
-import org.jboss.aerogear.webpush.Subscription;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -37,8 +34,6 @@ import java.util.concurrent.ConcurrentMap;
 public class InMemoryDataStore implements DataStore {
 
     public static final byte[] EMPTY_BYTES = {};
-    private final ConcurrentMap<String, Registration> registrations = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, Set<Subscription>> subscriptions = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, NewSubscription> newSubscriptions = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, List<PushMessage>> waitingDeliveryMessages = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, ConcurrentMap<String, PushMessage>> sentMessages = new ConcurrentHashMap<>();
@@ -143,74 +138,4 @@ public class InMemoryDataStore implements DataStore {
         }
         return salt;
     }
-
-    @Override
-    public boolean saveRegistration(final Registration registration) {
-        Objects.requireNonNull(registration, "registration must not be null");
-        return registrations.putIfAbsent(registration.id(), registration) == null;
-    }
-
-    @Override
-    public Optional<Registration> getRegistration(final String id) {
-        return Optional.ofNullable(registrations.get(id));
-    }
-
-    @Override
-    public void saveChannel(final Subscription subscription) {
-        final String id = subscription.registrationId();
-        final Set<Subscription> newSubscriptions = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        newSubscriptions.add(subscription);
-        while (true) {
-            final Set<Subscription> currentSubscriptions = subscriptions.get(id);
-            if (currentSubscriptions == null) {
-                final Set<Subscription> previous = subscriptions.putIfAbsent(id, newSubscriptions);
-                if (previous != null) {
-                    newSubscriptions.addAll(previous);
-                    if (subscriptions.replace(id, previous, newSubscriptions)) {
-                        break;
-                    }
-                } else {
-                    break;
-                }
-            } else {
-                newSubscriptions.addAll(currentSubscriptions);
-                if (subscriptions.replace(id, currentSubscriptions, newSubscriptions)) {
-                    break;
-                }
-            }
-        }
-    }
-
-    @Override
-    public void removeChannel(final Subscription subscription) {
-        Objects.requireNonNull(subscription, "subscription must not be null");
-        while (true) {
-            final Set<Subscription> currentSubscriptions = subscriptions.get(subscription.registrationId());
-            if (currentSubscriptions == null || currentSubscriptions.isEmpty()) {
-                break;
-            }
-            final Set<Subscription> newSubscriptions = Collections.newSetFromMap(new ConcurrentHashMap<>());
-            boolean added = newSubscriptions.addAll(currentSubscriptions);
-            if (!added){
-                break;
-            }
-
-            boolean removed = newSubscriptions.remove(subscription);
-            if (removed) {
-                if (subscriptions.replace(subscription.registrationId(), currentSubscriptions, newSubscriptions)) {
-                    break;
-                }
-            }
-        }
-    }
-
-    @Override
-    public Set<Subscription> getSubscriptions(final String registrationId) {
-        final Set<Subscription> subscriptions = this.subscriptions.get(registrationId);
-        if (subscriptions == null) {
-            return Collections.emptySet();
-        }
-        return Collections.unmodifiableSet(subscriptions);
-    }
-
 }

@@ -23,8 +23,7 @@ public enum Resource {
     PUSH("p"),
     PUSH_MESSAGE("d"),
     RECEIPTS("receipts"),
-    RECEIPT("r"),
-    REGISTRATION("reg");    //FIXME remove
+    RECEIPT("r");
 
     private final String resourceName;
 
