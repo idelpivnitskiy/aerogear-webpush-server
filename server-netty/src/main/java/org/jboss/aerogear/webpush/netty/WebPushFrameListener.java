@@ -234,7 +234,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                     receivePushMessage(pushMessage, optionalClient.get());
                 } else {
                     webpushServer.saveMessage(pushMessage);
-                    LOGGER.info("UA not connected, saved to storage: ", pushMessage);
+                    LOGGER.info("UA not connected, saved to storage: {}", pushMessage);
                 }
             }
         });
@@ -418,12 +418,12 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private void receivePushMessage(final PushMessage pushMessage, final Client client) {
         Http2Headers promiseHeaders = promiseHeaders(pushMessage);
         Http2Headers monitorHeaders = monitorHeaders(pushMessage);
-        final int pushStreamId = encoder.connection().local().nextStreamId();
-        encoder.writePushPromise(client.ctx, client.streamId, pushStreamId, promiseHeaders, 0, client.ctx.newPromise())
+        final int pushStreamId = client.encoder.connection().local().nextStreamId();
+        client.encoder.writePushPromise(client.ctx, client.streamId, pushStreamId, promiseHeaders, 0, client.ctx.newPromise())
                .addListener(WebPushFrameListener::logFutureError);
-        encoder.writeHeaders(client.ctx, pushStreamId, monitorHeaders, 0, false, client.ctx.newPromise())
+        client.encoder.writeHeaders(client.ctx, pushStreamId, monitorHeaders, 0, false, client.ctx.newPromise())
                .addListener(WebPushFrameListener::logFutureError);
-        encoder.writeData(client.ctx, pushStreamId, copiedBuffer(pushMessage.payload(), UTF_8), 0, true,
+        client.encoder.writeData(client.ctx, pushStreamId, copiedBuffer(pushMessage.payload(), UTF_8), 0, true,
                 client.ctx.newPromise()).addListener(WebPushFrameListener::logFutureError);
         LOGGER.info("Sent to client={}, pushPromiseStreamId={}, promiseHeaders={}, monitorHeaders={}, pushMessage={}",
                 client, pushStreamId, promiseHeaders, monitorHeaders, pushMessage);
