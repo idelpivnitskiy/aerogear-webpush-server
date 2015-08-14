@@ -127,7 +127,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
             case GET:
                 switch (resource) {
                     case SUBSCRIPTION:
-                        handleReceivingPushMessages(ctx, path, streamId, padding, headers);
+                        handleReceivingPushMessages(ctx, path, streamId, headers);
                         return;
                     case RECEIPT:
 //                        handleReceivingPushMessageReceipts(ctx, path, streamId, padding, headers);
@@ -395,7 +395,6 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private void handleReceivingPushMessages(final ChannelHandlerContext ctx,
                                final String path,
                                final int streamId,
-                               final int padding,
                                final Http2Headers headers) {
         Optional<NewSubscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionById);
         subscription.ifPresent(sub -> {
