@@ -459,12 +459,17 @@ public class WebPushConsole {
 
         @Override
         public void inbound(Http2Headers headers, int streamId) {
-            printInbound(headers.toString(), streamId);
+            printInbound(headers.toString(), streamId, null);
+        }
+
+        @Override
+        public void pushPromise(Http2Headers headers, int streamId, int promisedStreamId) {
+            printInbound(headers.toString(), streamId, promisedStreamId);
         }
 
         @Override
         public void notification(final String data, final int streamId) {
-            printInbound(data, streamId);
+            printInbound(data, streamId, null);
         }
 
         @Override
@@ -491,10 +496,12 @@ public class WebPushConsole {
             console.setPrompt(current);
         }
 
-        private void printInbound(final String message, final int streamId) {
+        private void printInbound(final String message, final int streamId, final Integer promisedStreamId) {
             final Prompt current = console.getPrompt();
             console.setPrompt(inbound);
-            console.getShell().out().println("[streamid:" + streamId + "] " + message);
+            console.getShell().out().println("[streamId:" + streamId
+                    + (promisedStreamId != null ? ", promisedStreamId:" + String.valueOf(promisedStreamId) : "")
+                    + "] " + message);
             console.setPrompt(current);
         }
     }

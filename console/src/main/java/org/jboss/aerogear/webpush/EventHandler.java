@@ -32,6 +32,15 @@ public interface EventHandler {
     void inbound(Http2Headers headers, int streamId);
 
     /**
+     * Fired after an inbound push promise event occurs.
+     *
+     * @param headers the headers returned from the register request.
+     * @param streamId the streamId for this response.
+     * @param promisedStreamId the promisedStreamId for this response.
+     */
+    void pushPromise(Http2Headers headers, int streamId, int promisedStreamId);
+
+    /**
      * Notifications send from the WebPush server
      *
      * @param data the body of the application server PUT request.
