@@ -108,6 +108,11 @@ public class DefaultWebPushServer implements WebPushServer {
     }
 
     @Override
+    public List<PushMessage> removeNewSubscription(String id) {
+        return store.removeNewSubscription(id);
+    }
+
+    @Override
     public void saveMessage(PushMessage msg) {
         store.saveMessage(msg);
     }

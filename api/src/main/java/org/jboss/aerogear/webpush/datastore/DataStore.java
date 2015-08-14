@@ -34,6 +34,8 @@ public interface DataStore {
 
     Optional<NewSubscription> getNewSubscription(String id);
 
+    List<PushMessage> removeNewSubscription(String id);
+
     void saveMessage(PushMessage msg);
 
     List<PushMessage> waitingDeliveryMessages(String subId);

@@ -37,6 +37,8 @@ public interface WebPushServer {
 
     Optional<NewSubscription> subscriptionByReceiptToken(String receiptToken);
 
+    List<PushMessage> removeNewSubscription(String id);
+
     void saveMessage(PushMessage msg);
 
     List<PushMessage> waitingDeliveryMessages(String subId);

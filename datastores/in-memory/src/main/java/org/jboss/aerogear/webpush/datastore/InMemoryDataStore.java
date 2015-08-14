@@ -57,6 +57,27 @@ public class InMemoryDataStore implements DataStore {
     }
 
     @Override
+    public List<PushMessage> removeNewSubscription(String id) {
+        List<PushMessage> result = null;
+        NewSubscription subscription;
+        List<PushMessage> waitingDelivery;
+        ConcurrentMap<String, PushMessage> sent;
+        do {
+            subscription = newSubscriptions.remove(id);
+            waitingDelivery = waitingDeliveryMessages.remove(id);
+            sent = sentMessages.remove(id);
+            if (sent != null) {
+                if (result == null) {
+                    result = new ArrayList<>(sent.values());
+                } else {
+                    result.addAll(sent.values());
+                }
+            }
+        } while (subscription != null || waitingDelivery != null || sent != null);
+        return result != null ? result : Collections.emptyList();
+    }
+
+    @Override
     public void saveMessage(PushMessage msg) {
         Objects.requireNonNull(msg, "push message can not be null");
         String subId = msg.subscription();

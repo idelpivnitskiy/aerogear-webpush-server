@@ -349,16 +349,14 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private void handlePushMessageSubscriptionRemoval(final ChannelHandlerContext ctx,
                                                       final int streamId,
                                                       final String path) {
-        //FIXME use newSubscription
-        final String endpointToken = extractEndpointToken(path);
-        final Optional<Subscription> subscription = webpushServer.subscription(endpointToken);
-        if (subscription.isPresent()) {
-            webpushServer.removeSubscription(subscription.get());
-//            notificationStreams.remove(endpointToken);
-            encoder.writeHeaders(ctx, streamId, okHeaders(), 0, true, ctx.newPromise());
-        } else {
-            encoder.writeHeaders(ctx, streamId, notFoundHeaders(), 0, true, ctx.newPromise());
-        }
+        final String subId = extractEndpointToken(path);
+        List<PushMessage> sentMessages = webpushServer.removeNewSubscription(subId);
+        removeClient(Optional.ofNullable(subId), monitoredStreams); //FIXME sent last response
+        sentMessages.forEach(sm -> {
+            removeClient(sm.receiptSubscription(), acksStreams);    //FIXME sent last response
+        });
+        LOGGER.info("Subscription {} removed", subId);
+        //FIXME sent last response
     }
 
     private void handleReceiptSubscriptionRemoval(final ChannelHandlerContext ctx,
