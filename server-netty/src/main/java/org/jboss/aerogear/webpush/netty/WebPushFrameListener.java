@@ -30,8 +30,9 @@ import io.netty.util.AsciiString;
 import io.netty.util.AttributeKey;
 import io.netty.util.ByteString;
 import io.netty.util.concurrent.Future;
+import org.jboss.aerogear.webpush.DefaultPushMessage;
 import org.jboss.aerogear.webpush.NewSubscription;
-import org.jboss.aerogear.webpush.Registration;
+import org.jboss.aerogear.webpush.PushMessage;
 import org.jboss.aerogear.webpush.Resource;
 import org.jboss.aerogear.webpush.Subscription;
 import org.jboss.aerogear.webpush.WebLink;
@@ -43,9 +44,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
-import static io.netty.buffer.Unpooled.copiedBuffer;
 import static io.netty.handler.codec.http.HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN;
 import static io.netty.handler.codec.http.HttpHeaderNames.ACCESS_CONTROL_EXPOSE_HEADERS;
 import static io.netty.handler.codec.http.HttpHeaderNames.CACHE_CONTROL;
@@ -64,21 +63,22 @@ public class WebPushFrameListener extends Http2FrameAdapter {
 
     private static final String WEBPUSH_URI = "/webpush/";
     private static final AsciiString ANY_ORIGIN = new AsciiString("*");
-    private static final AsciiString EXPOSE_HEADERS = new AsciiString("link, cache-control, location");
+    private static final AsciiString EXPOSE_HEADERS = new AsciiString("link, cache-control, location"); //FIXME rename
+    private static final AsciiString EXPOSE_HEADERS_SHORT = new AsciiString("cache-control, content-type"); //FIXME rename
+    private static final AsciiString CONTENT_TYPE_VALUE = new AsciiString("text/plain;charset=utf8");
     private static final AsciiString PUSH_RECEIPT_HEADER = new AsciiString("push-receipt");
     private static final AsciiString TTL_HEADER = new AsciiString("ttl");
+    private static final AsciiString PREFER_HEADER = new AsciiString("prefer");
     private static final AttributeKey<String> REG_ID = AttributeKey.valueOf("regId");
     private static final AttributeKey<String> SUBSCRIPTION_ID = AttributeKey.valueOf("subscriptionId");
-    private static final AsciiString PREFER = new AsciiString("prefer");
 
-    private static final ConcurrentHashMap<String, Optional<Client>> monitoredStreams = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, String> notificationStreams = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Client> monitoredStreams = new ConcurrentHashMap<>();
 
     private static final String GET = "GET";
     private static final String POST = "POST";
     private static final String DELETE = "DELETE";
 
-    static final AsciiString LINK = new AsciiString("link");
+    static final AsciiString LINK_HEADER = new AsciiString("link");
 
     private final WebPushServer webpushServer;
     private Http2ConnectionEncoder encoder;
@@ -86,6 +86,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private Http2Connection.PropertyKey pathPropertyKey;
     private Http2Connection.PropertyKey resourcePropertyKey;
     private Http2Connection.PropertyKey pushReceiptPropertyKey;
+    private Http2Connection.PropertyKey ttlPropertyKey;
 
     public WebPushFrameListener(final WebPushServer webpushServer) {
         Objects.requireNonNull(webpushServer, "webpushServer must not be null");
@@ -98,6 +99,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         pathPropertyKey = connection.newKey();
         resourcePropertyKey = connection.newKey();
         pushReceiptPropertyKey = connection.newKey();
+        ttlPropertyKey = connection.newKey();
     }
 
     @Override
@@ -118,15 +120,20 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         stream.setProperty(pathPropertyKey, path);
         stream.setProperty(resourcePropertyKey, resource);
         switch (method) {
-            case GET:   //FIXME
-                if (path.contains(Resource.REGISTRATION.resourceName())) {
-                    handleMonitor(ctx, path, streamId, padding, headers);
+            case GET:
+                switch (resource) {
+                    case SUBSCRIPTION:
+                        handleReceivingPushMessages(ctx, path, streamId, padding, headers);
+                        return;
+                    case RECEIPT:
+//                        handleReceivingPushMessageReceipts(ctx, path, streamId, padding, headers);
+                        return;
                 }
                 break;
             case POST:
                 switch (resource) {
                     case SUBSCRIBE:
-                        handleNewSubscribe(ctx, streamId);
+                        handleSubscribe(ctx, streamId);
                         return;
                     case RECEIPTS:
                         handleReceipts(ctx, streamId, path);
@@ -134,6 +141,8 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                     case PUSH:
                         Optional<String> pushReceiptToken = getPushReceiptToken(headers);
                         stream.setProperty(pushReceiptPropertyKey, pushReceiptToken);
+                        Optional<Integer> ttl = getTtl(headers);
+                        stream.setProperty(ttlPropertyKey, ttl);
                         //see onDataRead(...) method
                         return;
                 }
@@ -169,9 +178,6 @@ public class WebPushFrameListener extends Http2FrameAdapter {
             case PUSH:
                 handlePush(ctx, streamId, path, data, padding); //FIXME rename to handleNotify
                 break;
-            default:    //FIXME
-                handleNotification(ctx, streamId, data, padding, path);
-                break;
         }
         return super.onDataRead(ctx, streamId, data, padding, endOfStream);
     }
@@ -195,115 +201,83 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         return Optional.empty();
     }
 
+    private static Optional<Integer> getTtl(Http2Headers headers) {
+        ByteString byteString = headers.get(TTL_HEADER);
+        if (byteString != null) {
+            Optional.of(byteString.parseAsciiInt());
+        }
+        return Optional.empty();
+    }
+
     private void handlePush(ChannelHandlerContext ctx, int streamId, String path, ByteBuf data, int padding) {
-        Optional<String> pushToken = extractToken(path);
-        pushToken.ifPresent(pt -> {
-            Optional<NewSubscription> subscription = webpushServer.subscriptionByPushToken(pushToken.get());
-            subscription.ifPresent(sub -> {
-                Http2Stream stream = encoder.connection().stream(streamId);
-                Optional<String> receiptToken = stream.getProperty(pushReceiptPropertyKey);
-                if (receiptToken.isPresent()) {
-                    Optional<NewSubscription> receiptSub = webpushServer.subscriptionByReceiptToken(receiptToken.get());
-                    if (!receiptSub.isPresent() || !subscription.equals(receiptSub)) {
-                        throw new RuntimeException("Subscriptions mismatched");
+        Optional<NewSubscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionByPushToken);
+        subscription.ifPresent(sub -> {
+            Http2Stream stream = encoder.connection().stream(streamId);
+            Optional<String> receiptToken = stream.getProperty(pushReceiptPropertyKey);
+            if (receiptToken.isPresent()) {
+                Optional<NewSubscription> receiptSub = webpushServer.subscriptionByReceiptToken(receiptToken.get());
+                if (!receiptSub.isPresent() || !subscription.equals(receiptSub)) {
+                    throw new RuntimeException("Subscriptions mismatched"); //FIXME 401
+                }
+            }
+            final int readableBytes = data.readableBytes();
+            if (readableBytes > webpushServer.config().messageMaxSize()) {
+                encoder.writeHeaders(ctx, streamId, messageToLarge(), 0, true, ctx.newPromise());
+            } else {
+                PushMessage pushMessage = buildPushMessage(sub.id(), data, stream);
+                Optional<Client> optionalClient = clientForSubId(sub.id());
+                if (optionalClient.isPresent()) {
+                    final Client client = optionalClient.get();
+                    if (!client.isHeadersSent()) {
+                        client.encoder.writeHeaders(client.ctx, client.streamId, EmptyHttp2Headers.INSTANCE, 0, false, client.ctx.newPromise())
+                                      .addListener(WebPushFrameListener::logFutureError);
+                        client.headersSent();
                     }
-                }
-                final int readableBytes = data.readableBytes();
-                if (readableBytes > webpushServer.config().messageMaxSize()) {
-                    encoder.writeHeaders(ctx, streamId, messageToLarge(), 0, true, ctx.newPromise());
+                    client.encoder.writeData(client.ctx, client.streamId, data.retain(), padding, false, client.ctx.newPromise())
+                                  .addListener(WebPushFrameListener::logFutureError);
+                    webpushServer.saveSentMessage(pushMessage);
+                    LOGGER.info("{} sent to UA", pushMessage);
                 } else {
-                    String pushMessageId = UUID.randomUUID().toString();
-                    String pushMessageToken = webpushServer.generateEndpointToken(pushMessageId, sub.id());
-                    //TODO save message and push to user agent
-                    encoder.writeHeaders(ctx, streamId, pushMessageHeaders(pushMessageToken), 0, true, ctx.newPromise());
-                    LOGGER.info("Push Message Resource: {}", pushMessageToken);
+                    webpushServer.saveMessage(pushMessage);
+                    LOGGER.info("{} saved in storage", pushMessage);
                 }
-            });
+                encoder.writeHeaders(ctx, streamId, pushMessageHeaders(pushMessage), 0, true, ctx.newPromise());
+            }
         });
     }
 
-    private static Http2Headers pushMessageHeaders(String pushMessageToken) {
+    private PushMessage buildPushMessage(String subId, ByteBuf data, Http2Stream stream) {
+        String pushMessageId = UUID.randomUUID().toString();
+        Optional<String> receiptToken = stream.getProperty(pushReceiptPropertyKey);
+        Optional<Integer> ttlOpt = stream.getProperty(ttlPropertyKey);
+        int ttl = ttlOpt.isPresent() ? ttlOpt.get() : 0;
+        return new DefaultPushMessage(pushMessageId, subId, receiptToken, data.toString(UTF_8), ttl);
+    }
+
+    private Http2Headers pushMessageHeaders(PushMessage pushMessage) {
+        String pushMessageToken = webpushServer
+                .generateEndpointToken(pushMessage.id(), pushMessage.subscription());
         return resourceHeaders(Resource.PUSH_MESSAGE, pushMessageToken);
     }
 
     public void shutdown() {
-        monitoredStreams.entrySet().stream().forEach(kv -> kv.getValue().ifPresent(client -> client.ctx.close()));
+        monitoredStreams.values().stream().forEach(client -> client.ctx.close());
         monitoredStreams.clear();
-        notificationStreams.clear();
     }
 
     public void disconnect(final ChannelHandlerContext ctx) {
         final Optional<String> regId = Optional.ofNullable(ctx.attr(REG_ID).get());
         if (regId.isPresent()) {
-            final Optional<Client> removed = monitoredStreams.remove(regId.get());
-            if (removed != null && removed.isPresent()) {
-                final Client client = removed.get();
+            final Client client = monitoredStreams.remove(regId.get());
+            if (client != null) {
                 LOGGER.info("Removed client regId{}", client);
             }
         }
         LOGGER.info("Disconnected channel {}", ctx.channel().id());
     }
 
-    private void handleNotification(final ChannelHandlerContext ctx,
-                                    final int streamId,
-                                    final ByteBuf data,
-                                    final int padding,
-                                    final String path) {
-        final int readableBytes = data.readableBytes();
-        if (readableBytes > webpushServer.config().messageMaxSize()) {
-            encoder.writeHeaders(ctx, streamId, messageToLarge(), 0, true, ctx.newPromise());
-        } else {
-            final String endpoint = extractEndpointToken(path);
-            handleNotify(endpoint, data, padding, en ->
-                            en.writeHeaders(ctx, streamId, acceptedHeaders(), 0, true, ctx.newPromise())
-            );
-//            FIXME
-//            Optional.ofNullable(aggregateChannels.get(endpoint)).ifPresent(agg ->
-//                            agg.subscriptions().stream().forEach(entry -> handleNotify(entry.endpoint(), data.copy(), padding, e -> {
-//                            }))
-//            );
-        }
-    }
-
-    private void handleNotify(final String endpoint,
-                              final String data,
-                              final int padding,
-                              final Consumer<Http2ConnectionEncoder> consumer) {
-        handleNotify(endpoint, copiedBuffer(data, UTF_8), padding, consumer);
-    }
-
-    private void handleNotify(final String endpoint,
-                              final ByteBuf data,
-                              final int padding,
-                              final Consumer<Http2ConnectionEncoder> consumer) {
-        final Optional<String> optionalRegId = subscriptionRegIdForEndpoint(endpoint);
-        if (optionalRegId.isPresent()) {
-            final Optional<Client> optionalClient = clientForRegId(optionalRegId.get());
-            if (optionalClient.isPresent()) {
-                final Client client = optionalClient.get();
-                LOGGER.info("Handle notification {} payload {}", client, data.toString(UTF_8));
-                if (!client.isHeadersSent()) {
-                    client.encoder.writeHeaders(client.ctx, client.streamId, EmptyHttp2Headers.INSTANCE, 0, false, client.ctx.newPromise())
-                            .addListener(WebPushFrameListener::logFutureError);
-                    client.headersSent();
-                }
-                client.encoder.writeData(client.ctx, client.streamId, data.retain(), padding, false, client.ctx.newPromise())
-                        .addListener(WebPushFrameListener::logFutureError);
-                webpushServer.setMessage(endpoint, Optional.empty());
-            } else {
-                webpushServer.setMessage(endpoint, Optional.of(data.toString(UTF_8)));
-                consumer.accept(encoder);
-            }
-        }
-    }
-
-    private static Optional<String> subscriptionRegIdForEndpoint(final String endpointToken) {
-        return Optional.ofNullable(notificationStreams.get(endpointToken));
-    }
-
-    private static Optional<Client> clientForRegId(final String regId) {
-        return Optional.ofNullable(monitoredStreams.get(regId)).orElse(Optional.empty());
-
+    private static Optional<Client> clientForSubId(final String subId) {
+        return Optional.ofNullable(monitoredStreams.get(subId));
     }
 
     private static void logFutureError(final Future future) {
@@ -312,7 +286,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         }
     }
 
-    private void handleNewSubscribe(final ChannelHandlerContext ctx, final int streamId) {
+    private void handleSubscribe(final ChannelHandlerContext ctx, final int streamId) {
         NewSubscription subscription = webpushServer.newSubscription();
         ctx.attr(SUBSCRIPTION_ID).set(subscription.id());
         encoder.writeHeaders(ctx, streamId, subscriptionHeaders(subscription), 0, true, ctx.newPromise());
@@ -324,7 +298,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         String receiptsToken = webpushServer.generateEndpointToken(subscription.id());
         return resourceHeaders(Resource.SUBSCRIPTION, subscription.id())
                 .set(ACCESS_CONTROL_EXPOSE_HEADERS, EXPOSE_HEADERS)
-                .set(LINK, asLink(webpushUri(Resource.PUSH, pushToken), WebLink.PUSH),
+                .set(LINK_HEADER, asLink(webpushUri(Resource.PUSH, pushToken), WebLink.PUSH),
                         asLink(webpushUri(Resource.RECEIPTS, receiptsToken), WebLink.RECEIPTS))
                 .set(CACHE_CONTROL, privateCacheWithMaxAge(webpushServer.config().registrationMaxAge()));
     }
@@ -353,11 +327,12 @@ public class WebPushFrameListener extends Http2FrameAdapter {
 
     private void handlePushMessageSubscriptionRemoval(final ChannelHandlerContext ctx, final String path,
             final int streamId) {
+        //FIXME use newSubscription
         final String endpointToken = extractEndpointToken(path);
         final Optional<Subscription> subscription = webpushServer.subscription(endpointToken);
         if (subscription.isPresent()) {
             webpushServer.removeSubscription(subscription.get());
-            notificationStreams.remove(endpointToken);
+//            notificationStreams.remove(endpointToken);
             encoder.writeHeaders(ctx, streamId, okHeaders(), 0, true, ctx.newPromise());
         } else {
             encoder.writeHeaders(ctx, streamId, notFoundHeaders(), 0, true, ctx.newPromise());
@@ -438,29 +413,30 @@ public class WebPushFrameListener extends Http2FrameAdapter {
       A monitor request is responded to with a push promise. A push promise is associated with a
       previous client-initiated request (the monitor request)
      */
-    private void handleMonitor(final ChannelHandlerContext ctx,
+    private void handleReceivingPushMessages(final ChannelHandlerContext ctx,
                                final String path,
                                final int streamId,
                                final int padding,
                                final Http2Headers headers) {
-        final Optional<Registration> registration = extractRegistrationId(path, Resource.REGISTRATION.resourceName())
-                .flatMap(webpushServer::registration);
-        registration.ifPresent(reg -> {
+        Optional<NewSubscription> subscription = extractToken(path).flatMap(webpushServer::getSubscription);
+        subscription.ifPresent(sub -> {
             final int pushStreamId = encoder.connection().local().nextStreamId();
             final Client client = new Client(ctx, pushStreamId, encoder);
-            monitoredStreams.put(reg.id(), Optional.of(client));
-            encoder.writePushPromise(ctx, streamId, pushStreamId, monitorHeaders(reg), 0, ctx.newPromise());
-            LOGGER.info("Monitor ctx={}, registrationId={}, pushPromiseStreamId={}, headers={}", ctx, reg.id(), pushStreamId, monitorHeaders(reg));
-            final Optional<ByteString> wait = Optional.ofNullable(headers.get(PREFER))
-                                                      .filter(val -> "wait=0".equals(val.toString()));
-            wait.ifPresent(s ->
-                            notificationStreams.entrySet().stream().filter(kv -> kv.getValue().equals(reg.id())).forEach(e -> {
-                                final String endpoint = e.getKey();
-                                final Optional<Subscription> sub = webpushServer.subscription(endpoint).filter(ch -> ch.message().isPresent());
-                                sub.ifPresent(ch -> handleNotify(endpoint, ch.message().get(), padding, q -> {
-                                }));
-                            })
-            );
+            monitoredStreams.put(sub.id(), client);
+            Http2Headers monitorHeaders = monitorHeaders();
+            encoder.writePushPromise(ctx, streamId, pushStreamId, monitorHeaders, 0, ctx.newPromise());
+            LOGGER.info("Monitor ctx={}, subscriptionId={}, pushPromiseStreamId={}, headers={}",
+                    ctx, sub.id(), pushStreamId, monitorHeaders);
+            final Optional<ByteString> wait = Optional.ofNullable(headers.get(PREFER_HEADER))
+                                                      .filter(val -> "wait=0".equals(val.toString()));  //FIXME improve
+//            wait.ifPresent(s ->
+//                notificationStreams.entrySet().stream().filter(kv -> kv.getValue().equals(sub.id())).forEach(e -> {
+//                    final String endpoint = e.getKey();
+//                    final Optional<Subscription> sub = webpushServer.subscription(endpoint).filter(ch -> ch.message().isPresent());
+//                    sub.ifPresent(ch -> handleNotify(endpoint, ch.message().get(), padding, q -> {
+//                    }));
+//                })
+//            );
         });
     }
 
@@ -476,14 +452,14 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN);
     }
 
-    private Http2Headers monitorHeaders(final Registration registration) {
+    private Http2Headers monitorHeaders() {
         return new DefaultHttp2Headers(false)
                 .status(OK.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ANY_ORIGIN)
-                .set(ACCESS_CONTROL_EXPOSE_HEADERS, new AsciiString("Link, Cache-Control"))
-//                .set(LINK, asLink(registration.subscribeUri(), WebLink.SUBSCRIBE.toString()),
-//                        asLink(registration.aggregateUri(), WebLink.AGGREGATE.toString()))
-                .set(CACHE_CONTROL, privateCacheWithMaxAge(webpushServer.config().registrationMaxAge()));
+                .set(ACCESS_CONTROL_EXPOSE_HEADERS, EXPOSE_HEADERS_SHORT)
+                .set(CACHE_CONTROL, privateCacheWithMaxAge(webpushServer.config().registrationMaxAge()))
+                .set(CONTENT_TYPE, CONTENT_TYPE_VALUE);
+        //TODO add "last-modified" and "content-length" headers
     }
 
     private static Http2Headers okHeaders() {

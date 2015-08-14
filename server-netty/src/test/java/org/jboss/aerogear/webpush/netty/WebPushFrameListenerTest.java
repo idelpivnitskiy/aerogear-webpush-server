@@ -50,7 +50,7 @@ import static org.jboss.aerogear.webpush.JsonMapper.toJson;
 import static org.jboss.aerogear.webpush.WebLink.AGGREGATE;
 import static org.jboss.aerogear.webpush.WebLink.SUBSCRIBE;
 import static org.jboss.aerogear.webpush.WebLink.REGISTRATION;
-import static org.jboss.aerogear.webpush.netty.WebPushFrameListener.LINK;
+import static org.jboss.aerogear.webpush.netty.WebPushFrameListener.LINK_HEADER;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
@@ -82,7 +82,7 @@ public class WebPushFrameListenerTest {
         final Http2Headers responseHeaders = register(frameListener, ctx, encoder);
         assertThat(responseHeaders.status(), equalTo(CREATED.codeAsText()));
         assertThat(responseHeaders.get(LOCATION), equalTo(asciiString(registrationPath(regId))));
-        assertThat(responseHeaders.getAll(LINK), hasItems(
+        assertThat(responseHeaders.getAll(LINK_HEADER), hasItems(
                 asciiString(REGISTRATION.weblink(registrationPath(regId))),
                 asciiString(SUBSCRIBE.weblink(subscribePath(regId)))));
         assertThat(responseHeaders.get(CACHE_CONTROL), equalTo(asciiString("private, max-age=10000")));
@@ -255,7 +255,7 @@ public class WebPushFrameListenerTest {
                 any(ChannelPromise.class));
         final Http2Headers monitorHeaders = captor.getValue();
         assertThat(monitorHeaders.status(), equalTo(OK.codeAsText()));
-        assertThat(monitorHeaders.getAll(LINK), hasItems(
+        assertThat(monitorHeaders.getAll(LINK_HEADER), hasItems(
                 asciiString(SUBSCRIBE.weblink(subscribePath(regId)))));
         assertThat(monitorHeaders.get(CACHE_CONTROL), equalTo(asciiString("private, max-age=10000")));
         frameListener.shutdown();
@@ -503,7 +503,7 @@ public class WebPushFrameListenerTest {
                                           final ChannelHandlerContext ctx,
                                           final Http2Headers registrationHeaders,
                                           final Http2ConnectionEncoder encoder) throws Http2Exception {
-        final ByteString subUri = getLinkUri(asciiString(SUBSCRIBE), registrationHeaders.getAll(LINK));
+        final ByteString subUri = getLinkUri(asciiString(SUBSCRIBE), registrationHeaders.getAll(LINK_HEADER));
         frameListener.onHeadersRead(ctx, 3, subHeaders(subUri), 0, (short) 22, false, 0, false);
         frameListener.onDataRead(ctx, 3, Unpooled.buffer(), 0, true);
         return verifyAndCapture(ctx, encoder, true);
@@ -514,7 +514,7 @@ public class WebPushFrameListenerTest {
                                                    final Http2Headers registrationHeaders,
                                                    final String json,
                                                    final Http2ConnectionEncoder encoder) throws Http2Exception {
-        final ByteString aggregateUri = getLinkUri(asciiString(AGGREGATE), registrationHeaders.getAll(LINK));
+        final ByteString aggregateUri = getLinkUri(asciiString(AGGREGATE), registrationHeaders.getAll(LINK_HEADER));
         frameListener.onHeadersRead(ctx, 3, subHeaders(aggregateUri), 0, (short) 22, false, 0, false);
         frameListener.onDataRead(ctx, 3, copiedBuffer(json, UTF_8), 0, true);
         return verifyAndCapture(ctx, encoder, true);
