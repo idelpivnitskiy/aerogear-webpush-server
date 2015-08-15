@@ -298,9 +298,6 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         Optional<Subscription> subscription = extractToken(path).flatMap(webpushServer::subscriptionById);
         subscription.ifPresent(sub -> {
             final Client client = new Client(ctx, streamId, encoder);
-            monitoredStreams.put(sub.id(), client);
-            ctx.attr(SUBSCRIPTION_ID).set(sub.id());
-            LOGGER.info("Registered client={}", client);
 
             List<PushMessage> newMessages = null;
             while (!(newMessages = webpushServer.waitingDeliveryMessages(sub.id())).isEmpty()) {
@@ -314,6 +311,11 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 encoder.writeHeaders(ctx, streamId, noContentHeaders(), 0, true, ctx.newPromise());
                 LOGGER.info("204 No Content has sent to client={}", client);
             });
+            if (!wait.isPresent()) {
+                monitoredStreams.put(sub.id(), client);
+                ctx.attr(SUBSCRIPTION_ID).set(sub.id());
+                LOGGER.info("Registered client={}", client);
+            }
         });
     }
 
