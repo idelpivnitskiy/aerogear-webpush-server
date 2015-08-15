@@ -164,11 +164,10 @@ public class WebPushConsole {
         @Option(hasValue = false, description = "display this help and exit")
         private boolean help;
 
-        @Option(shortName = 'p',
-                hasValue = true,
-                description = "the path that that the WebPush server exposes for subscriptions",
+        @Option(hasValue = true,
+                description = "the url that the WebPush server exposes for subscriptions",
                 defaultValue = "/webpush/subscribe")
-        private String path;
+        private String url;
 
         public SubscribeCommand(final ConnectCommand connectCommand) {
             this.connectCommand = connectCommand;
@@ -185,7 +184,7 @@ public class WebPushConsole {
                     return CommandResult.FAILURE;
                 }
                 try {
-                    client.createSubscription(path);
+                    client.createSubscription(url);
                 } catch (Exception e) {
                     e.printStackTrace();
                     return CommandResult.FAILURE;
