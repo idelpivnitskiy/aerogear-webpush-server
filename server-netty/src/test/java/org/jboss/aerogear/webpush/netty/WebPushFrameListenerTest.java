@@ -23,7 +23,6 @@ import org.hamcrest.TypeSafeMatcher;
 import org.jboss.aerogear.webpush.DefaultSubscription;
 import org.jboss.aerogear.webpush.Resource;
 import org.jboss.aerogear.webpush.WebLink;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.stubbing.OngoingStubbing;
@@ -37,7 +36,7 @@ import static io.netty.handler.codec.http.HttpHeaderNames.CACHE_CONTROL;
 import static io.netty.handler.codec.http.HttpHeaderNames.LOCATION;
 import static io.netty.handler.codec.http.HttpResponseStatus.CREATED;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
-import static io.netty.util.CharsetUtil.*;
+import static io.netty.util.CharsetUtil.UTF_8;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.MatcherAssert.*;
@@ -105,9 +104,11 @@ public class WebPushFrameListenerTest {
             receivePushMessages(frameListener, ctx, subscribeHeaders);
             final ByteBuf payload = copiedBuffer("payload", UTF_8);
             notify(frameListener, ctx, encoder, subscribeHeaders, payload);
-            verify(encoder).writePushPromise(any(ChannelHandlerContext.class), eq(3), eq(4), any(Http2Headers.class), eq(0), any(ChannelPromise.class));
+            verify(encoder).writePushPromise(any(ChannelHandlerContext.class), eq(3), eq(4), any(Http2Headers.class),
+                    eq(0), any(ChannelPromise.class));
             final ArgumentCaptor<Http2Headers> captor = ArgumentCaptor.forClass(Http2Headers.class);
-            verify(encoder).writeHeaders(any(ChannelHandlerContext.class), eq(4), captor.capture(), eq(0), eq(false), any(ChannelPromise.class));
+            verify(encoder).writeHeaders(any(ChannelHandlerContext.class), eq(4), captor.capture(), eq(0), eq(false),
+                    any(ChannelPromise.class));
             final Http2Headers headers = captor.getValue();
             assertThat(headers.status(), equalTo(OK.codeAsText()));
             assertThat(headers.get(CACHE_CONTROL), equalTo(asciiString("private, max-age=10000")));
