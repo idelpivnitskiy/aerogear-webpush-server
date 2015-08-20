@@ -17,9 +17,6 @@ import io.netty.util.AsciiString;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
 import io.netty.util.ByteString;
-import org.hamcrest.Description;
-import org.hamcrest.Matcher;
-import org.hamcrest.TypeSafeMatcher;
 import org.jboss.aerogear.webpush.DefaultPushMessage;
 import org.jboss.aerogear.webpush.DefaultSubscription;
 import org.jboss.aerogear.webpush.PushMessage;
@@ -62,7 +59,6 @@ import static org.mockito.Mockito.when;
 
 public class WebPushFrameListenerTest {
 
-    private static final String WEBPUSH_URI = "/webpush/";
     private static final int STREAM_ID = 3;
     private static final int PROMISE_STEAM_ID = 4;
 
@@ -73,15 +69,15 @@ public class WebPushFrameListenerTest {
 
     @Test
     public void subscribe() throws Exception {
-        final String subscriptionId = "9999";
-        final String pushResourceId = "8888";
-        final String pushToken = "p123";
-        final String receiptToken = "r123";
+        final String subscriptionId = "subscriptionId";
+        final String pushResourceId = "pushResourceId";
+        final String pushToken = "pushToken";
+        final String receiptToken = "receiptToken";
         final ChannelHandlerContext ctx = mockChannelHandlerContext(subscriptionId);
         final WebPushFrameListener frameListener = new WebPushFrameListener(MockWebPushServerBuilder
                 .withSubscription(new DefaultSubscription(subscriptionId, pushResourceId))
-                .pushToken(pushToken)
-                .receiptToken(receiptToken)
+                .pushResourceToken(pushToken)
+                .receiptsToken(receiptToken)
                 .build());
         final Http2ConnectionEncoder encoder = mockEncoder(w -> w.thenReturn(subscribePath(subscriptionId)), SUBSCRIBE);
         frameListener.encoder(encoder);
@@ -89,7 +85,7 @@ public class WebPushFrameListenerTest {
             final Http2Headers responseHeaders = subscribe(frameListener, ctx, encoder);
             assertThat(responseHeaders.status(), equalTo(CREATED.codeAsText()));
             assertThat(responseHeaders.get(LOCATION), equalTo(subscriptionLocation(subscriptionId)));
-            assertThat(responseHeaders.getAll(LINK_HEADER), hasItems(pushWebLink(pushToken), receiptWebLink(receiptToken)));
+            assertThat(responseHeaders.getAll(LINK_HEADER), hasItems(pushWebLink(pushResourceId), receiptWebLink(receiptToken)));
             assertThat(responseHeaders.get(CACHE_CONTROL), equalTo(asciiString("private, max-age=0")));
         } finally {
             frameListener.shutdown();
@@ -98,12 +94,12 @@ public class WebPushFrameListenerTest {
 
     @Test @Ignore
     public void deleteSubscription() throws Exception {
-        final String subscriptionId = "9999";
-        final String pushResourceId = "8888";
+        final String subscriptionId = "subscriptionId";
+        final String pushResourceId = "pushResourceId";
         final ChannelHandlerContext ctx = mockChannelHandlerContext(subscriptionId);
         final WebPushFrameListener frameListener = new WebPushFrameListener(MockWebPushServerBuilder
                 .withSubscription(new DefaultSubscription(subscriptionId, pushResourceId))
-                .pushToken(pushResourceId)
+                .pushResourceToken(pushResourceId)
                 .build());
         final Http2ConnectionEncoder encoder = mockEncoder(w -> w.thenReturn(pushPath(pushResourceId))
                 .thenReturn(pushPath(pushResourceId)), Resource.PUSH);
@@ -129,13 +125,13 @@ public class WebPushFrameListenerTest {
 
     @Test
     public void receivePushMessages() throws Exception {
-        final String subscriptionId = "9999";
-        final String pushResourceId = "8888";
+        final String subscriptionId = "subscriptionId";
+        final String pushResourceId = "pushResourceId";
         final ChannelHandlerContext ctx = mockChannelHandlerContext(subscriptionId);
         final WebPushFrameListener frameListener = new WebPushFrameListener(MockWebPushServerBuilder
                 .withSubscription(new DefaultSubscription(subscriptionId, pushResourceId))
                 .subscriptionMaxAge(10000L)
-                .pushToken(pushResourceId)
+                .pushResourceToken(pushResourceId)
                 .build());
         final Http2ConnectionEncoder encoder = mockEncoder(w -> w.thenReturn(pushPath(pushResourceId))
                 .thenReturn(pushPath(pushResourceId)), Resource.PUSH);
@@ -157,13 +153,13 @@ public class WebPushFrameListenerTest {
 
     @Test
     public void receivePushMessagesWaitNoMessages() throws Exception {
-        final String subscriptionId = "9999";
-        final String pushResourceId = "8888";
+        final String subscriptionId = "subscriptionId";
+        final String pushResourceId = "pushResourceId";
         final ChannelHandlerContext ctx = mockChannelHandlerContext(subscriptionId);
         final WebPushFrameListener frameListener = new WebPushFrameListener(MockWebPushServerBuilder
                 .withSubscription(new DefaultSubscription(subscriptionId, pushResourceId))
                 .subscriptionMaxAge(10000L)
-                .pushToken(pushResourceId)
+                .pushResourceToken(pushResourceId)
                 .build());
         final Http2ConnectionEncoder encoder = mockEncoder(w -> w.thenReturn(pushPath(pushResourceId))
                 .thenReturn(pushPath(pushResourceId)), Resource.PUSH);
@@ -183,15 +179,15 @@ public class WebPushFrameListenerTest {
 
     @Test
     public void receivePushMessagesWait() throws Exception {
-        final String subscriptionId = "9999";
-        final String pushResourceId = "8888";
+        final String subscriptionId = "subscriptionId";
+        final String pushResourceId = "pushResourceId";
         final PushMessage pushMessage = new DefaultPushMessage("pushMessageId", subscriptionId, Optional.empty(), "testing", Optional.of(0));
         final ChannelHandlerContext ctx = mockChannelHandlerContext(subscriptionId);
         final WebPushFrameListener frameListener = new WebPushFrameListener(MockWebPushServerBuilder
                 .withSubscription(new DefaultSubscription(subscriptionId, pushResourceId))
                 .subscriptionMaxAge(10000L)
                 .waitingPushMessage(pushMessage)
-                .pushToken(pushResourceId)
+                .pushResourceToken(pushResourceId)
                 .build());
         final Http2ConnectionEncoder encoder = mockEncoder(w -> w.thenReturn(pushPath(pushResourceId))
                 .thenReturn(pushPath(pushResourceId)), Resource.PUSH);
@@ -213,24 +209,26 @@ public class WebPushFrameListenerTest {
 
     @Test
     public void sendPush() throws Exception {
-        final String subscriptionId = "9999";
-        final String pushResourceId = "8888";
-        final PushMessage pushMessage = new DefaultPushMessage("pushMessageId", subscriptionId, Optional.empty(), "testing", Optional.of(0));
+        final String subscriptionId = "subscriptionId";
+        final String pushResourceId = "pushResourceId";
+        final String receiptsToken = "receiptsToken";
+        final String pushMessageToken = "pushMessageToken";
         final ChannelHandlerContext ctx = mockChannelHandlerContext(subscriptionId);
         final WebPushFrameListener frameListener = new WebPushFrameListener(MockWebPushServerBuilder
                 .withSubscription(new DefaultSubscription(subscriptionId, pushResourceId))
                 .subscriptionMaxAge(10000L)
-                .waitingPushMessage(pushMessage)
-                .pushToken(pushResourceId)
+                .receiptsToken(receiptsToken)
+                .pushResourceToken(pushResourceId)
+                .pushMessageToken(pushMessageToken)
                 .build());
         final Http2ConnectionEncoder encoder = mockEncoder(w -> w.thenReturn(pushPath(pushResourceId))
                 .thenReturn(pushPath(pushResourceId)), Resource.PUSH);
         frameListener.encoder(encoder);
         try {
             final Http2Headers subscribeHeaders = subscribe(frameListener, ctx, encoder);
-            final Http2Headers headers = sendPush(frameListener, ctx, encoder, subscribeHeaders, copiedBuffer(pushMessage.payload(), UTF_8));
+            final Http2Headers headers = sendPush(frameListener, ctx, encoder, subscribeHeaders, copiedBuffer("Test", UTF_8));
             assertThat(headers.status(), equalTo(CREATED.codeAsText()));
-            assertThat(headers.get(LOCATION), equalTo(asciiString(messagePath(pushResourceId))));
+            assertThat(headers.get(LOCATION), equalTo(asciiString(messagePath(pushMessageToken))));
         } finally {
             frameListener.shutdown();
         }
@@ -238,8 +236,8 @@ public class WebPushFrameListenerTest {
 
     @Test
     public void sendPushMessageTooBig() throws Exception {
-        final String subscriptionId = "9999";
-        final String pushResourceId = "8888";
+        final String subscriptionId = "subscriptionId";
+        final String pushResourceId = "pushResourceId";
         final String payload = new String(new byte[4099]);
         final ByteBuf data = copiedBuffer(payload, UTF_8);
         final PushMessage pushMessage = new DefaultPushMessage("pushMessageId", subscriptionId, Optional.empty(), payload, Optional.of(0));
@@ -248,7 +246,7 @@ public class WebPushFrameListenerTest {
                 .withSubscription(new DefaultSubscription(subscriptionId, pushResourceId))
                 .subscriptionMaxAge(10000L)
                 .waitingPushMessage(pushMessage)
-                .pushToken(pushResourceId)
+                .pushResourceToken(pushResourceId)
                 .build());
         final Http2ConnectionEncoder encoder = mockEncoder(w -> w.thenReturn(pushPath(pushResourceId))
                 .thenReturn(pushPath(pushResourceId)), Resource.PUSH);
@@ -257,6 +255,35 @@ public class WebPushFrameListenerTest {
             final Http2Headers subscribeHeaders = subscribe(frameListener, ctx, encoder);
             final Http2Headers headers = sendPush(frameListener, ctx, encoder, subscribeHeaders, data);
             assertThat(headers.status(), equalTo(REQUEST_ENTITY_TOO_LARGE.codeAsText()));
+        } finally {
+            frameListener.shutdown();
+        }
+    }
+
+    @Test
+    public void receipt() throws Exception {
+        final String subscriptionId = "subscriptionId";
+        final String pushResourceId = "pushResourceId";
+        final String receiptsToken = "receiptsToken";
+        final String receiptToken = "receiptToken";
+        final ChannelHandlerContext ctx = mockChannelHandlerContext(subscriptionId);
+        final WebPushFrameListener frameListener = new WebPushFrameListener(MockWebPushServerBuilder
+                .withSubscription(new DefaultSubscription(subscriptionId, pushResourceId))
+                .subscriptionMaxAge(10000L)
+                .receiptsToken(receiptsToken)
+                .receiptToken(receiptToken)
+                .pushResourceToken(pushResourceId)
+                .build());
+        final Http2ConnectionEncoder encoder = mockEncoder(w -> w.thenReturn(recieptsPath(receiptToken)), Resource.RECEIPT);
+        frameListener.encoder(encoder);
+        try {
+            final Http2Headers subscribeHeaders = subscribe(frameListener, ctx, encoder);
+            receiveReceipts(frameListener, ctx, subscribeHeaders);
+            final ArgumentCaptor<Http2Headers> captor = ArgumentCaptor.forClass(Http2Headers.class);
+            verify(encoder, atLeastOnce()).writeHeaders(any(ChannelHandlerContext.class), eq(STREAM_ID), captor.capture(), eq(0), eq(true), any(ChannelPromise.class));
+            final Http2Headers headers = captor.getValue();
+            assertThat(headers.status(), equalTo(CREATED.codeAsText()));
+            assertThat(headers.get(LOCATION), equalTo(asciiString(recieptsPath(receiptToken))));
         } finally {
             frameListener.shutdown();
         }
@@ -286,6 +313,13 @@ public class WebPushFrameListenerTest {
         frameListener.onHeadersRead(ctx, STREAM_ID, receivePushMessageHeaders(location), 0, (short) 22, false, 0, true);
     }
 
+    private static void receiveReceipts(final WebPushFrameListener frameListener,
+                                            final ChannelHandlerContext ctx,
+                                            final Http2Headers subscribeHeaders) throws Http2Exception {
+        final ByteString receipts = getLinkUri(asciiString(WebLink.RECEIPTS), subscribeHeaders.getAll(LINK_HEADER));
+        frameListener.onHeadersRead(ctx, STREAM_ID, receiveReceiptsHeaders(receipts), 0, (short) 22, false, 0, true);
+    }
+
     private static void receivePushMessagesWithWait(final WebPushFrameListener frameListener,
                                 final ChannelHandlerContext ctx,
                                 final Http2Headers subscribeHeaders,
@@ -301,7 +335,7 @@ public class WebPushFrameListenerTest {
                                          final Http2Headers subHeaders,
                                          final ByteBuf data) throws Http2Exception {
         final ByteString push = getLinkUri(asciiString(PUSH), subHeaders.getAll(LINK_HEADER));
-        frameListener.onHeadersRead(ctx, STREAM_ID, notifyHeaders(push), 0, (short) 22, false, 0, false);
+        frameListener.onHeadersRead(ctx, STREAM_ID, sendHeaders(push), 0, (short) 22, false, 0, false);
         frameListener.onDataRead(ctx, STREAM_ID, data, 0, true);
         return verifyAndCapture(ctx, encoder, true);
     }
@@ -346,7 +380,14 @@ public class WebPushFrameListenerTest {
         return requestHeaders;
     }
 
-    private static Http2Headers notifyHeaders(final ByteString resourceUrl) {
+    private static Http2Headers receiveReceiptsHeaders(final ByteString resourceUrl) {
+        final Http2Headers requestHeaders = new DefaultHttp2Headers(false);
+        requestHeaders.method(AsciiString.of(HttpMethod.POST.name()));
+        requestHeaders.path(resourceUrl);
+        return requestHeaders;
+    }
+
+    private static Http2Headers sendHeaders(final ByteString resourceUrl) {
         final Http2Headers requestHeaders = new DefaultHttp2Headers(false);
         requestHeaders.method(AsciiString.of(HttpMethod.POST.name()));
         requestHeaders.path(resourceUrl);
@@ -428,7 +469,7 @@ public class WebPushFrameListenerTest {
     }
 
     private static String recieptsPath(final String token) {
-        return webpushPath(Resource.RECEIPTS.resourceName(), token);
+        return webpushPath(Resource.RECEIPT.resourceName(), token);
     }
 
     private static String webpushPath(final String path, final String registrationId) {
@@ -467,25 +508,6 @@ public class WebPushFrameListenerTest {
 
     private static AsciiString receiptWebLink(final String receiptToken) {
         return asLink(webpushUri(Resource.RECEIPTS, receiptToken), WebLink.RECEIPTS);
-    }
-
-    private Matcher<ByteString> hasResource(final Resource resource) {
-        return new TypeSafeMatcher<ByteString>() {
-            @Override
-            public boolean matchesSafely(final ByteString byteString) {
-                return byteString.toString().contains(WEBPUSH_URI + "/" + resource.resourceName());
-            }
-
-            @Override
-            public void describeTo(final Description description) {
-                description.appendText("Link should contain ").appendValue(WEBPUSH_URI + "/" +  resource.resourceName());
-            }
-
-            @Override
-            protected void describeMismatchSafely(final ByteString byteString, final Description mismatchDescription) {
-                mismatchDescription.appendText(" was ").appendValue(byteString);
-            }
-        };
     }
 
 }

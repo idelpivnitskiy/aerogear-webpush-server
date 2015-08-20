@@ -216,7 +216,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         final Optional<String> receiptsToken = extractToken(path);
         receiptsToken.ifPresent(e -> {
             final String subscriptionToken = receiptsToken.get();
-            final Optional<Subscription> subscription = webpushServer.subscriptionByToken(subscriptionToken);
+            final Optional<Subscription> subscription = webpushServer.subscriptionByReceiptToken(subscriptionToken);
             subscription.ifPresent(sub -> {
                 final String receiptResourceId = UUID.randomUUID().toString();
                 final String receiptResourceToken = webpushServer.generateEndpointToken(receiptResourceId, sub.id());
