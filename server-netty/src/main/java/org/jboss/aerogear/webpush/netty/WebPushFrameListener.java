@@ -261,8 +261,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private PushMessage buildPushMessage(String subId, ByteBuf data, Http2Stream stream) {
         String pushMessageId = UUID.randomUUID().toString();
         Optional<String> receiptToken = stream.getProperty(pushReceiptPropertyKey);
-        Optional<Integer> ttlOpt = stream.getProperty(ttlPropertyKey);
-        int ttl = ttlOpt.isPresent() ? ttlOpt.get() : 0;
+        Optional<Integer> ttl = stream.getProperty(ttlPropertyKey);
         return new DefaultPushMessage(pushMessageId, subId, receiptToken, data.toString(UTF_8), ttl);
     }
 
