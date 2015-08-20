@@ -308,11 +308,8 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         subscription.ifPresent(sub -> {
             final Client client = new Client(ctx, streamId, encoder);
 
-            List<PushMessage> newMessages = null;
-            while (!(newMessages = webpushServer.waitingDeliveryMessages(sub.id())).isEmpty()) {
-                for (PushMessage pushMessage : newMessages) {
-                    receivePushMessage(pushMessage, client);
-                }
+            for (PushMessage pushMessage : webpushServer.waitingDeliveryMessages(sub.id())) {
+                receivePushMessage(pushMessage, client);
             }
             final Optional<ByteString> wait = Optional.ofNullable(headers.get(PREFER_HEADER))
                                                       .filter(val -> "wait=0".equals(val.toString()));  //FIXME improve

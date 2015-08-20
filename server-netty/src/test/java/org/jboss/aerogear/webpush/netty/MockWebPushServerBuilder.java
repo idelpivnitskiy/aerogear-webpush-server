@@ -1,14 +1,12 @@
 package org.jboss.aerogear.webpush.netty;
 
+import org.jboss.aerogear.webpush.PushMessage;
 import org.jboss.aerogear.webpush.Subscription;
 import org.jboss.aerogear.webpush.WebPushServer;
 import org.jboss.aerogear.webpush.WebPushServerConfig;
-import org.mockito.stubbing.OngoingStubbing;
 
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.util.Collections;
 import java.util.Optional;
-import java.util.function.Consumer;
 
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -32,13 +30,8 @@ public class MockWebPushServerBuilder {
         return this;
     }
 
-    public MockWebPushServerBuilder addSubscription(final Subscription subscription) {
-        when(webPushServer.subscriptionById(subscription.id())).thenReturn(Optional.of(subscription));
-        return this;
-    }
-
-    public MockWebPushServerBuilder subscriptionOrder(final Consumer<OngoingStubbing<Optional<Subscription>>> consumer) {
-        //consumer.accept(when(webPushServer.newSubscription(registrationId)));
+    public MockWebPushServerBuilder waitingPushMessage(final PushMessage message) {
+        when(webPushServer.waitingDeliveryMessages(subscription.id())).thenReturn(Collections.singletonList(message));
         return this;
     }
 
@@ -67,11 +60,4 @@ public class MockWebPushServerBuilder {
         return new MockWebPushServerBuilder(subscription);
     }
 
-    private static URI asURI(final String context, final String resource, final String id) {
-        try {
-            return new URI(context + "/" + resource + "/" + id);
-        } catch (final URISyntaxException e) {
-            throw new RuntimeException("String [" + resource + " is not a valid URI", e);
-        }
-    }
 }
