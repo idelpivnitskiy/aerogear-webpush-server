@@ -37,7 +37,8 @@ public class MockWebPushServerBuilder {
     }
 
     public MockWebPushServerBuilder waitingPushMessage(final PushMessage message) {
-        when(webPushServer.waitingDeliveryMessages(subscription.id())).thenReturn(Collections.singletonList(message));
+        when(webPushServer.waitingDeliveryMessages(subscription.id())).thenReturn(Collections.singletonList(message))
+                .thenReturn(Collections.emptyList());
         return this;
     }
 
@@ -48,12 +49,13 @@ public class MockWebPushServerBuilder {
 
     public MockWebPushServerBuilder receiptsToken(final String token) {
         when(webPushServer.generateEndpointToken(subscription.id())).thenReturn(token);
+        when(webPushServer.subscriptionByToken(eq(token))).thenReturn(Optional.of(subscription));
         when(webPushServer.subscriptionByReceiptToken(token)).thenReturn(Optional.of(subscription));
         return this;
     }
 
     public MockWebPushServerBuilder receiptToken(final String token) {
-        when(webPushServer.subscriptionByReceiptToken(token)).thenReturn(Optional.of(subscription));
+        when(webPushServer.subscriptionByReceiptToken(eq(token))).thenReturn(Optional.of(subscription));
         when(webPushServer.generateEndpointToken(anyString(), eq(subscription.id()))).thenReturn(token);
         return this;
     }

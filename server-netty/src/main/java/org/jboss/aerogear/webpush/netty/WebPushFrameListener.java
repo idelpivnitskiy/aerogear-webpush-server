@@ -216,7 +216,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         final Optional<String> receiptsToken = extractToken(path);
         receiptsToken.ifPresent(e -> {
             final String subscriptionToken = receiptsToken.get();
-            final Optional<Subscription> subscription = webpushServer.subscriptionByReceiptToken(subscriptionToken);
+            final Optional<Subscription> subscription = webpushServer.subscriptionByToken(subscriptionToken);
             subscription.ifPresent(sub -> {
                 final String receiptResourceId = UUID.randomUUID().toString();
                 final String receiptResourceToken = webpushServer.generateEndpointToken(receiptResourceId, sub.id());
@@ -308,8 +308,11 @@ public class WebPushFrameListener extends Http2FrameAdapter {
         subscription.ifPresent(sub -> {
             final Client client = new Client(ctx, streamId, encoder);
 
-            for (PushMessage pushMessage : webpushServer.waitingDeliveryMessages(sub.id())) {
-                receivePushMessage(pushMessage, client);
+            List<PushMessage> newMessages = null;
+            while (!(newMessages = webpushServer.waitingDeliveryMessages(sub.id())).isEmpty()) {
+                for (PushMessage pushMessage : newMessages) {
+                    receivePushMessage(pushMessage, client);
+                }
             }
             final Optional<ByteString> wait = Optional.ofNullable(headers.get(PREFER_HEADER))
                                                       .filter(val -> "wait=0".equals(val.toString()));  //FIXME improve
