@@ -338,6 +338,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 .addListener(WebPushFrameListener::logFutureError);
         client.encoder.writeData(client.ctx, pushStreamId, copiedBuffer(pushMessage.payload(), UTF_8), 0, true,
                 client.ctx.newPromise()).addListener(WebPushFrameListener::logFutureError);
+        client.ctx.flush(); //FIXME flush at the end of all writes
         LOGGER.info("Sent to client={}, pushPromiseStreamId={}, promiseHeaders={}, monitorHeaders={}, pushMessage={}",
                 client, pushStreamId, promiseHeaders, monitorHeaders, pushMessage);
 
