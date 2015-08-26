@@ -374,6 +374,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 client.ctx.newPromise()).addListener(WebPushFrameListener::logFutureError);
         client.encoder.writeHeaders(client.ctx, pushStreamId, ackHeaders, 0, true,
                 client.ctx.newPromise()).addListener(WebPushFrameListener::logFutureError);
+        client.ctx.flush();
         LOGGER.info("Sent ack to client={}, pushPromiseStreamId={}, promiseHeaders={}, ackHeaders={}, pushMessage={}",
                 client, pushStreamId, promiseHeaders, ackHeaders, pushMessage);
     }
