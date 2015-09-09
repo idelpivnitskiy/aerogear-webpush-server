@@ -290,7 +290,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     }
 
     private static Http2Headers messageToLarge() {
-        return new DefaultHttp2Headers(false)
+        return new DefaultHttp2Headers()
                 .status(REQUEST_ENTITY_TOO_LARGE.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ALLOW_ORIGIN_ANY);
     }
@@ -346,7 +346,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     }
 
     private Http2Headers monitorHeaders(final PushMessage pushMessage) {
-        return new DefaultHttp2Headers(false)
+        return new DefaultHttp2Headers()
                 .status(OK.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ALLOW_ORIGIN_ANY)
                 .set(ACCESS_CONTROL_EXPOSE_HEADERS, EXPOSE_HEADERS_CACHE_CONTROL_CONTENT_TYPE_CONTENT_LENGTH)
@@ -413,7 +413,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private static Http2Headers resourceHeaders(final Resource resource,
                                                 final String resourceToken,
                                                 final AsciiString exposeHeaders) {
-        return new DefaultHttp2Headers(false)
+        return new DefaultHttp2Headers()
                 .status(CREATED.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ALLOW_ORIGIN_ANY)
                 .set(ACCESS_CONTROL_EXPOSE_HEADERS, exposeHeaders)
@@ -458,25 +458,25 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     }
 
     private static Http2Headers goneHeaders() {
-        return new DefaultHttp2Headers(false)
+        return new DefaultHttp2Headers()
                 .status(GONE.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ALLOW_ORIGIN_ANY);  //FIXME add date
     }
 
     private static Http2Headers noContentHeaders() {
-        return new DefaultHttp2Headers(false)
+        return new DefaultHttp2Headers()
                 .status(NO_CONTENT.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ALLOW_ORIGIN_ANY);
     }
 
     private static Http2Headers notFoundHeaders() {
-        return new DefaultHttp2Headers(false)
+        return new DefaultHttp2Headers()
                 .status(NOT_FOUND.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ALLOW_ORIGIN_ANY);
     }
 
     private static Http2Headers badRequestHeaders() {
-        return new DefaultHttp2Headers(false)
+        return new DefaultHttp2Headers()
                 .status(BAD_REQUEST.codeAsText())
                 .set(ACCESS_CONTROL_ALLOW_ORIGIN, ALLOW_ORIGIN_ANY);
     }
@@ -488,7 +488,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
 
     private Http2Headers promiseHeaders(final PushMessage pushMessage) {
         final String token = webpushServer.generateEndpointToken(pushMessage.id(), pushMessage.subscription());
-        return new DefaultHttp2Headers(false)
+        return new DefaultHttp2Headers()
                 .method(GET_ASCII)
                 .path(webpushUri(Resource.PUSH_MESSAGE, token))
                 .authority(authority);

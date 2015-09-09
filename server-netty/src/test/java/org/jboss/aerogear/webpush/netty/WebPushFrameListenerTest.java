@@ -373,7 +373,7 @@ public class WebPushFrameListenerTest {
     }
 
     private static Http2Headers newHeaders(final ByteString path, final HttpMethod method) {
-        final Http2Headers headers = new DefaultHttp2Headers(false);
+        final Http2Headers headers = new DefaultHttp2Headers();
         headers.path(path);
         headers.method(AsciiString.of(method.name()));
         return headers;
