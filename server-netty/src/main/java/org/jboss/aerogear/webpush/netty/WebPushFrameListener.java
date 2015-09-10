@@ -338,6 +338,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 .addListener(WebPushFrameListener::logFutureError);
         client.encoder.writeData(client.ctx, pushStreamId, copiedBuffer(pushMessage.payload(), UTF_8), 0, true,
                 client.ctx.newPromise()).addListener(WebPushFrameListener::logFutureError);
+        writePendingBytes(client);
         client.ctx.flush(); //FIXME flush at the end of all writes
         LOGGER.info("Sent to client={}, pushPromiseStreamId={}, promiseHeaders={}, monitorHeaders={}, pushMessage={}",
                 client, pushStreamId, promiseHeaders, monitorHeaders, pushMessage);
@@ -374,6 +375,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
                 client.ctx.newPromise()).addListener(WebPushFrameListener::logFutureError);
         client.encoder.writeHeaders(client.ctx, pushStreamId, ackHeaders, 0, true,
                 client.ctx.newPromise()).addListener(WebPushFrameListener::logFutureError);
+        writePendingBytes(client);
         client.ctx.flush();
         LOGGER.info("Sent ack to client={}, pushPromiseStreamId={}, promiseHeaders={}, ackHeaders={}, pushMessage={}",
                 client, pushStreamId, promiseHeaders, ackHeaders, pushMessage);
@@ -515,6 +517,7 @@ public class WebPushFrameListener extends Http2FrameAdapter {
             if (client != null) {
                 client.encoder.writeHeaders(client.ctx, client.streamId, goneHeaders(), 0, true,
                         client.ctx.newPromise());
+                writePendingBytes(client);
                 client.ctx.flush();
                 LOGGER.info("Removed client={}", client);
             }
@@ -524,6 +527,15 @@ public class WebPushFrameListener extends Http2FrameAdapter {
     private static void logFutureError(final Future future) {
         if (!future.isSuccess()) {
             LOGGER.error("ChannelFuture failed. Cause:", future.cause());
+        }
+    }
+
+    private static void writePendingBytes(final Client client) {
+        try {
+            client.encoder.flowController().writePendingBytes();
+        } catch (final Http2Exception e) {
+            //TODO: handle errors
+            e.printStackTrace();
         }
     }
 

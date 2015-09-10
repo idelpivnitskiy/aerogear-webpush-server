@@ -12,6 +12,7 @@ import io.netty.handler.codec.http2.Http2Connection.PropertyKey;
 import io.netty.handler.codec.http2.Http2ConnectionEncoder;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2RemoteFlowController;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
 import io.netty.util.Attribute;
@@ -389,6 +390,8 @@ public class WebPushFrameListenerTest {
                                                       final Resource... resources) {
         final Http2ConnectionEncoder encoder = mock(Http2ConnectionEncoder.class);
         final Http2Connection connection = mock(Http2Connection.class);
+        final Http2RemoteFlowController flowController = mock(Http2RemoteFlowController.class);
+        when(encoder.flowController()).thenReturn(flowController);
 
         final Endpoint local = mock(Endpoint.class);
         final Http2Stream stream = mock(Http2Stream.class);
